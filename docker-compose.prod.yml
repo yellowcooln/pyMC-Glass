@@ -1,0 +1,15 @@
+services:
+  pki-init:
+    env_file:
+      - ./backend/.env.production
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+
+  backend:
+    env_file:
+      - ./backend/.env.production
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/pymc_glass
