@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="$ROOT_DIR/VERSION"
 CHANGELOG_FILE="$ROOT_DIR/CHANGELOG.md"
+FRONTEND_CHANGELOG_FILE="$ROOT_DIR/frontend/public/CHANGELOG.md"
 
 DRY_RUN=false
 NOTE_PARTS=()
@@ -83,7 +84,7 @@ main_path = root / "backend/app/main.py"
 main_text = main_path.read_text(encoding="utf-8")
 main_updated, main_count = re.subn(
     r'version\s*=\s*"\d+\.\d+\.\d+"',
-    f'version="{version}"',
+    f'version = "{version}"',
     main_text,
     count=1,
 )
@@ -155,6 +156,9 @@ changelog_path.write_text(content, encoding="utf-8")
 PY
 fi
 
+mkdir -p "$(dirname "$FRONTEND_CHANGELOG_FILE")"
+cp "$CHANGELOG_FILE" "$FRONTEND_CHANGELOG_FILE"
+
 echo "Bumped patch version: $CURRENT_VERSION -> $NEW_VERSION"
 echo "Updated files:"
 echo "  - VERSION"
@@ -163,3 +167,4 @@ echo "  - backend/app/main.py"
 echo "  - frontend/package.json"
 echo "  - frontend/package-lock.json"
 echo "  - CHANGELOG.md (${CHANGELOG_UPDATED_WITH})"
+echo "  - frontend/public/CHANGELOG.md"

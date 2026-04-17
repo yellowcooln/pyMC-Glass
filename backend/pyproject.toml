@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymc-glass-backend"
-version = "0.1.2"
+version = "1.0.2"
 description = "pyMC_Glass backend service"
 requires-python = ">=3.11"
 dependencies = [
