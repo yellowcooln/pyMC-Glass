@@ -36,8 +36,9 @@
   </div>
 </template>
 <script setup lang="ts">
-import { RouterView } from "vue-router";
-import { onMounted, ref } from "vue";
+import { RouterView, useRoute } from "vue-router";
+import { onMounted, ref, watch } from "vue";
+import { isAuthenticated } from "./state/appState";
 
 const VERSION_COOKIE_NAME = "pymc_glass_seen_version";
 const appVersion = ((import.meta.env.VITE_APP_VERSION as string | undefined) ?? "0.1.0").trim();
@@ -48,6 +49,8 @@ const buyMeCoffeeUrl = (
 
 const showReleasePopup = ref(false);
 const releaseNotes = ref("Loading changelog...");
+const releaseCheckStarted = ref(false);
+const route = useRoute();
 
 function getCookie(name: string): string | null {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -63,15 +66,14 @@ function setCookie(name: string, value: string, days = 365): void {
 function extractVersionSection(markdown: string, version: string): string | null {
   const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const versionRegex = new RegExp(
-    `^## \\[${escapedVersion}\\][\\s\\S]*?(?=^## \\[|$)`,
-    "m",
+    `## \\[${escapedVersion}\\][\\s\\S]*?(?=\\n## \\[|$)`,
   );
   const matchedVersion = markdown.match(versionRegex);
   if (matchedVersion?.[0]) {
     return matchedVersion[0].trim();
   }
 
-  const unreleasedRegex = /^## \[Unreleased\][\s\S]*?(?=^## \[|$)/m;
+  const unreleasedRegex = /## \[Unreleased\][\s\S]*?(?=\n## \[|$)/;
   const matchedUnreleased = markdown.match(unreleasedRegex);
   return matchedUnreleased?.[0]?.trim() ?? null;
 }
@@ -105,9 +107,24 @@ function dismissReleasePopup(): void {
   setCookie(VERSION_COOKIE_NAME, appVersion);
   showReleasePopup.value = false;
 }
+function canCheckReleasePopup(): boolean {
+  return isAuthenticated.value && route.name !== "login";
+}
+
+async function maybeShowReleasePopupAfterLogin(): Promise<void> {
+  if (releaseCheckStarted.value || !canCheckReleasePopup()) {
+    return;
+  }
+  releaseCheckStarted.value = true;
+  await maybeShowReleasePopup();
+}
 
 onMounted(() => {
-  void maybeShowReleasePopup();
+  void maybeShowReleasePopupAfterLogin();
+});
+
+watch([isAuthenticated, () => route.name], () => {
+  void maybeShowReleasePopupAfterLogin();
 });
 </script>
 <style scoped>

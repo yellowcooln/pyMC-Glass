@@ -7,15 +7,23 @@ CHANGELOG_FILE="$ROOT_DIR/CHANGELOG.md"
 FRONTEND_CHANGELOG_FILE="$ROOT_DIR/frontend/public/CHANGELOG.md"
 
 DRY_RUN=false
+AUTO_PUSH=true
 NOTE_PARTS=()
 for arg in "$@"; do
   if [[ "$arg" == "--dry-run" ]]; then
     DRY_RUN=true
+  elif [[ "$arg" == "--no-push" ]]; then
+    AUTO_PUSH=false
   else
     NOTE_PARTS+=("$arg")
   fi
 done
 NOTE="${NOTE_PARTS[*]:-}"
+
+IS_GIT_REPO=false
+if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  IS_GIT_REPO=true
+fi
 
 read_version_from_pyproject() {
   python3 - "$ROOT_DIR/backend/pyproject.toml" <<'PY'
@@ -55,6 +63,17 @@ if $DRY_RUN; then
   echo "  new version:     $NEW_VERSION"
   echo "  note:            ${NOTE:-<none>}"
   exit 0
+fi
+
+if $IS_GIT_REPO; then
+  if ! git -C "$ROOT_DIR" diff --quiet || ! git -C "$ROOT_DIR" diff --cached --quiet; then
+    echo "Working tree is not clean. Commit or stash changes before running release-patch." >&2
+    exit 1
+  fi
+  if git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/v$NEW_VERSION" >/dev/null 2>&1; then
+    echo "Tag v$NEW_VERSION already exists." >&2
+    exit 1
+  fi
 fi
 
 printf "%s\n" "$NEW_VERSION" > "$VERSION_FILE"
@@ -159,6 +178,28 @@ fi
 mkdir -p "$(dirname "$FRONTEND_CHANGELOG_FILE")"
 cp "$CHANGELOG_FILE" "$FRONTEND_CHANGELOG_FILE"
 
+if $IS_GIT_REPO; then
+  git -C "$ROOT_DIR" add \
+    VERSION \
+    backend/pyproject.toml \
+    backend/app/main.py \
+    frontend/package.json \
+    frontend/package-lock.json \
+    CHANGELOG.md \
+    frontend/public/CHANGELOG.md
+
+  git -C "$ROOT_DIR" commit -m "chore(release): v$NEW_VERSION"
+  git -C "$ROOT_DIR" tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+
+  if $AUTO_PUSH; then
+    if git -C "$ROOT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+      git -C "$ROOT_DIR" push --follow-tags
+    else
+      echo "No upstream branch configured. Skipping push; tag v$NEW_VERSION exists locally."
+    fi
+  fi
+fi
+
 echo "Bumped patch version: $CURRENT_VERSION -> $NEW_VERSION"
 echo "Updated files:"
 echo "  - VERSION"
@@ -168,3 +209,11 @@ echo "  - frontend/package.json"
 echo "  - frontend/package-lock.json"
 echo "  - CHANGELOG.md (${CHANGELOG_UPDATED_WITH})"
 echo "  - frontend/public/CHANGELOG.md"
+if $IS_GIT_REPO; then
+  echo "Created release commit and tag: v$NEW_VERSION"
+  if $AUTO_PUSH; then
+    echo "Pushed commit/tag if upstream is configured"
+  else
+    echo "Push skipped (--no-push)"
+  fi
+fi
