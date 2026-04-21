@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class BootstrapStatusResponse(BaseModel):
     needs_bootstrap: bool
+    server_setup_complete: bool
 
 
 class BootstrapAdminRequest(BaseModel):

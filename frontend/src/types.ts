@@ -2,6 +2,7 @@ export type UserRole = "admin" | "operator" | "viewer" | string;
 
 export interface BootstrapStatusResponse {
   needs_bootstrap: boolean;
+  server_setup_complete: boolean;
 }
 
 export interface BootstrapAdminRequest {
