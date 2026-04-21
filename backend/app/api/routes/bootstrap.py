@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db.models import User
+from app.db.models import SystemSetting, User
 from app.db.session import get_db_session
 from app.schemas.bootstrap import (
     BootstrapAdminRequest,
@@ -12,6 +12,7 @@ from app.schemas.bootstrap import (
 )
 from app.security.passwords import hash_password
 from app.services.audit import write_audit_log
+from app.services.system_settings import MANAGED_MQTT_SETTINGS_KEY
 
 router = APIRouter(prefix="/api/bootstrap")
 
@@ -19,7 +20,13 @@ router = APIRouter(prefix="/api/bootstrap")
 @router.get("/status", response_model=BootstrapStatusResponse)
 def bootstrap_status(db: Session = Depends(get_db_session)) -> BootstrapStatusResponse:
     total_users = db.scalar(select(func.count()).select_from(User)) or 0
-    return BootstrapStatusResponse(needs_bootstrap=total_users == 0)
+    mqtt_row = db.scalar(
+        select(SystemSetting).where(SystemSetting.key == MANAGED_MQTT_SETTINGS_KEY)
+    )
+    return BootstrapStatusResponse(
+        needs_bootstrap=total_users == 0,
+        server_setup_complete=mqtt_row is not None,
+    )
 
 
 @router.post("/admin", response_model=BootstrapAdminResponse)

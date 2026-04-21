@@ -53,6 +53,7 @@ import type {
 const TOKEN_STORAGE_KEY = "pymc_glass_token";
 const USER_STORAGE_KEY = "pymc_glass_user";
 const EXPIRES_AT_STORAGE_KEY = "pymc_glass_expires_at";
+const SETUP_WIZARD_SKIP_KEY = "pymc_glass_setup_wizard_skipped";
 const MAX_TELEMETRY_EVENTS = 100;
 
 export const appState = reactive({
@@ -77,6 +78,7 @@ export const appState = reactive({
   lastSyncAt: null as string | null,
   toastSuccess: null as string | null,
   toastError: null as string | null,
+  setupWizardVisible: false,
 });
 
 export const isAuthenticated = computed(() => Boolean(appState.token && appState.user));
@@ -222,6 +224,20 @@ function clearSession(): void {
   localStorage.removeItem(EXPIRES_AT_STORAGE_KEY);
 }
 
+async function checkSetupWizard(): Promise<void> {
+  if (localStorage.getItem(SETUP_WIZARD_SKIP_KEY)) {
+    return;
+  }
+  try {
+    const status = await getBootstrapStatus();
+    if (!status.server_setup_complete) {
+      appState.setupWizardVisible = true;
+    }
+  } catch {
+    // Non-critical — silently ignore if the check fails.
+  }
+}
+
 export async function initializeAppState(): Promise<void> {
   appState.initializing = true;
   try {
@@ -237,6 +253,7 @@ export async function initializeAppState(): Promise<void> {
         persistSession(storedToken, user, storedExpiresAt ?? "");
         await refreshAllData();
         startTelemetryStream();
+        await checkSetupWizard();
       } catch {
         clearSession();
       }
@@ -382,6 +399,7 @@ export async function loginAccount(email: string, password: string): Promise<voi
     await refreshAllData();
     startTelemetryStream();
     pushSuccess("Signed in.");
+    await checkSetupWizard();
   } catch (error) {
     pushError(error);
   } finally {

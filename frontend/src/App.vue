@@ -1,7 +1,11 @@
 <template>
   <RouterView />
+  <SetupWizardModal
+    v-if="appState.setupWizardVisible"
+    @complete="appState.setupWizardVisible = false"
+  />
   <div
-    v-if="showReleasePopup"
+    v-if="showReleasePopup && !appState.setupWizardVisible"
     class="fixed inset-0 z-[1400] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
     role="dialog"
     aria-modal="true"
@@ -38,7 +42,8 @@
 <script setup lang="ts">
 import { RouterView, useRoute } from "vue-router";
 import { onMounted, ref, watch } from "vue";
-import { isAuthenticated } from "./state/appState";
+import { appState, isAuthenticated } from "./state/appState";
+import SetupWizardModal from "./components/ui/SetupWizardModal.vue";
 
 const VERSION_COOKIE_NAME = "pymc_glass_seen_version";
 const appVersion = ((import.meta.env.VITE_APP_VERSION as string | undefined) ?? "0.1.0").trim();
