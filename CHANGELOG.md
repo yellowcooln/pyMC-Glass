@@ -1,5 +1,23 @@
 # Changelog
 All notable changes to this project are documented in this file.
+## [1.0.4] - 2026-04-21
+
+### Chores
+
+- Prep production release with nginx and tagging workflow (97ea2db)
+
+
+### Features
+
+- Add setup wizard modal and enhance bootstrap status response (5757117)
+
+
+### Other
+
+- Initial commit (8bfa09b)
+
+- Merge remote-tracking branch 'origin/main' (a958b6e)
+
 ## [1.0.2] - 2026-04-17
 
 ### Other
