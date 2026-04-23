@@ -60,14 +60,36 @@ plain_output_theme() {
   TAB3="      "
   CM="[OK]"
   CROSS="[ERROR]"
-  INFO="[INFO]"
-  OS="OS:"
-  HOSTNAME="Hostname:"
-  NETWORK="Network:"
-  GATEWAY="URL:"
-  DEFAULT="[DEFAULT]"
-  ADVANCED="[ADVANCED]"
+  DNSOK="[OK]"
+  DNSFAIL="[ERROR]"
+  INFO=""
+  OS=""
+  OSVERSION=""
+  CONTAINERTYPE=""
+  DISKSIZE=""
+  CPUCORE=""
+  RAMSIZE=""
+  SEARCH=""
+  VERIFYPW=""
+  CONTAINERID=""
+  HOSTNAME=""
+  BRIDGE=""
+  NETWORK=""
+  GATEWAY=""
+  ICON_DISABLEIPV6=""
+  DEFAULT="[DEFAULT] "
+  MACADDRESS=""
+  VLANTAG=""
+  ROOTSSH=""
+  ADVANCED="[ADVANCED] "
   CREATING=""
+  FUSE=""
+  GPU=""
+  HOURGLASS=""
+}
+
+sanitize_output() {
+  printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g'
 }
 
 msg_info() {
@@ -80,7 +102,7 @@ msg_info() {
   MSG_INFO_SHOWN["$msg"]=1
   log_msg "[INFO] $msg"
   stop_spinner
-  echo "[INFO] $msg"
+  echo "[INFO] $(sanitize_output "$msg")"
 }
 
 msg_ok() {
@@ -88,7 +110,7 @@ msg_ok() {
   [[ -z "$msg" ]] && return
   stop_spinner
   clear_line
-  echo "[OK] $msg"
+  echo "[OK] $(sanitize_output "$msg")"
   log_msg "[OK] $msg"
 }
 
@@ -96,7 +118,7 @@ msg_warn() {
   local msg="$1"
   [[ -z "$msg" ]] && return
   stop_spinner
-  echo "[WARN] $msg" >&2
+  echo "[WARN] $(sanitize_output "$msg")" >&2
   log_msg "[WARN] $msg"
 }
 
@@ -104,7 +126,7 @@ msg_error() {
   local msg="$1"
   [[ -z "$msg" ]] && return
   stop_spinner
-  echo "[ERROR] $msg" >&2
+  echo "[ERROR] $(sanitize_output "$msg")" >&2
   log_msg "[ERROR] $msg"
 }
 
@@ -114,7 +136,7 @@ msg_custom() {
   local msg="${3:-}"
   [[ -z "$msg" ]] && return
   stop_spinner
-  echo "$msg"
+  echo "$(sanitize_output "$msg")"
   log_msg "$msg"
 }
 
