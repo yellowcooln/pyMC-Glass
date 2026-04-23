@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+source <(
+  curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func \
+    | sed \
+        -e 's/Proxmox VE Helper Scripts/pyMC-Glass LXC Installer/g' \
+        -e 's/Community-Scripts Options/pyMC-Glass Installer Options/g' \
+        -e 's/Community-Scripts SETTINGS Menu/pyMC-Glass Installer Settings/g' \
+        -e 's/Community-Scripts/pyMC-Glass/g'
+)
 # Copyright (c) 2026 yellowcooln
 # License: MIT
 
@@ -36,19 +43,6 @@ header_info() {
   echo
   echo "pyMC-Glass LXC Installer"
   echo
-}
-
-whiptail() {
-  local args=()
-  local arg
-  for arg in "$@"; do
-    arg="${arg//Proxmox VE Helper Scripts/pyMC-Glass LXC Installer}"
-    arg="${arg//Community-Scripts Options/pyMC-Glass Installer Options}"
-    arg="${arg//Community-Scripts SETTINGS Menu/pyMC-Glass Installer Settings}"
-    arg="${arg//Community-Scripts/pyMC-Glass}"
-    args+=("${arg}")
-  done
-  command whiptail "${args[@]}"
 }
 
 header_info "$APP"
