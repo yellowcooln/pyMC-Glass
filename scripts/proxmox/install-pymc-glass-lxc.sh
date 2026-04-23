@@ -98,6 +98,12 @@ replace_env_value() {
   fi
 }
 
+copy_file() {
+  local source="${1}"
+  local target="${2}"
+  install -D -m 0644 "${source}" "${target}"
+}
+
 install_base_packages() {
   log "Installing base packages"
   apt-get update
@@ -139,13 +145,14 @@ checkout_repo() {
 }
 
 prepare_env_files() {
-  local compose_env backend_env
+  local compose_env backend_env backend_runtime_env
   compose_env="${APP_DIR}/.env.production"
   backend_env="${APP_DIR}/backend/.env.production"
+  backend_runtime_env="${APP_DIR}/backend/.env"
 
   log "Preparing production environment files"
-  cp -n "${APP_DIR}/.env.production.example" "${compose_env}"
-  cp -n "${APP_DIR}/backend/.env.production.example" "${backend_env}"
+  [[ -f "${compose_env}" ]] || copy_file "${APP_DIR}/.env.production.example" "${compose_env}"
+  [[ -f "${backend_env}" ]] || copy_file "${APP_DIR}/backend/.env.production.example" "${backend_env}"
 
   if [[ -z "${POSTGRES_PASSWORD}" ]]; then
     POSTGRES_PASSWORD="$(random_password 32)"
@@ -159,6 +166,10 @@ prepare_env_files() {
   replace_env_value "${backend_env}" "BOOTSTRAP_SEED_ADMIN_EMAIL" "${ADMIN_EMAIL}"
   replace_env_value "${backend_env}" "BOOTSTRAP_SEED_ADMIN_PASSWORD" "${ADMIN_PASSWORD}"
   replace_env_value "${backend_env}" "BOOTSTRAP_SEED_ADMIN_DISPLAY_NAME" "${ADMIN_DISPLAY_NAME}"
+
+  # The base compose file still references backend/.env for pki-init and backend.
+  # Mirror the production env so docker compose has the file it expects.
+  copy_file "${backend_env}" "${backend_runtime_env}"
 }
 
 write_lxc_override() {

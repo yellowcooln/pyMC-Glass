@@ -53,7 +53,7 @@ run_app_installer() {
     ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME}" \
     POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
     ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
-    bash -lc 'curl -fsSL "$0" | bash' "${INSTALL_SCRIPT_URL}" || {
+    bash -c 'curl -fsSL "$0" | bash' "${INSTALL_SCRIPT_URL}" || {
     msg_error "pyMC_Glass deployment failed inside CT ${CTID}"
     exit 1
   }
