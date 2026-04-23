@@ -212,6 +212,20 @@ git reset --hard "origin/${APP_REPO_BRANCH}"
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.lxc.yml up -d --build
 EOF
   chmod 0755 /usr/local/bin/pymc-glass-update
+
+  cat >/usr/local/bin/update <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/local/bin/pymc-glass-update "$@"
+EOF
+  chmod 0755 /usr/local/bin/update
+
+  cat >/usr/bin/update <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/local/bin/pymc-glass-update "$@"
+EOF
+  chmod 0755 /usr/bin/update
 }
 
 deploy_stack() {
@@ -256,6 +270,7 @@ Admin password: ${ADMIN_PASSWORD}
 Useful commands:
   cd ${APP_DIR}
   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.lxc.yml ps
+  update
   pymc-glass-update
 EOF
 }
