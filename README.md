@@ -46,3 +46,19 @@ Simple management stack for pyMC repeaters (API + DB + MQTT + frontend).
 7. Stop production stack:
    - `make prod-down`
 
+## Proxmox LXC helper
+Run this on the Proxmox host to create an Ubuntu 24.04 LXC, enable Docker-friendly LXC features, and deploy `pyMC_Glass` inside it:
+
+`bash -c "$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox/pymc-glass-lxc.sh)"`
+
+Common overrides:
+- `CTID=123 HOSTNAME=pymc-glass STORAGE=local-lvm bash -c "$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox/pymc-glass-lxc.sh)"`
+- `REPO_BRANCH=dev FRONTEND_PORT=8081 API_PORT=8080 bash -c "$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox/pymc-glass-lxc.sh)"`
+
+Defaults:
+- Ubuntu `24.04` template
+- Unprivileged LXC with `nesting=1,keyctl=1`
+- `2` cores, `4096` MB RAM, `16` GB disk
+- Frontend on port `80`, backend health/API on port `8080`
+
+The host-side helper downloads and runs [`scripts/proxmox/install-pymc-glass-lxc.sh`](scripts/proxmox/install-pymc-glass-lxc.sh) inside the container. That installer sets production env files, installs Docker Engine and Compose, builds the stack, and creates a `pymc-glass-update` helper inside the LXC.
