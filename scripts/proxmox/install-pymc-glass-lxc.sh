@@ -11,22 +11,36 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@pymc.glass}"
 ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME:-Admin}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+INSTALL_LOG_FILE="${INSTALL_LOG_FILE:-/var/log/pymc-glass-install.log}"
+
+exec 3>&1
 
 if [[ "${DEBUG:-0}" == "1" ]]; then
   set -x
+else
+  mkdir -p "$(dirname "${INSTALL_LOG_FILE}")"
+  : >"${INSTALL_LOG_FILE}"
+  chmod 0600 "${INSTALL_LOG_FILE}"
+  exec >>"${INSTALL_LOG_FILE}" 2>&1
 fi
 
 log() {
-  printf '[pyMC_Glass] %s\n' "$*"
+  printf '[pyMC_Glass] %s\n' "$*" >&3
 }
 
 fail() {
-  printf '[pyMC_Glass] ERROR: %s\n' "$*" >&2
+  printf '[pyMC_Glass] ERROR: %s\n' "$*" >&3
+  if [[ "${DEBUG:-0}" != "1" ]]; then
+    printf '[pyMC_Glass] Log: %s\n' "${INSTALL_LOG_FILE}" >&3
+  fi
   exit 1
 }
 
 on_error() {
-  printf '[pyMC_Glass] ERROR: failed at line %s\n' "$1" >&2
+  printf '[pyMC_Glass] ERROR: failed at line %s\n' "$1" >&3
+  if [[ "${DEBUG:-0}" != "1" ]]; then
+    printf '[pyMC_Glass] Log: %s\n' "${INSTALL_LOG_FILE}" >&3
+  fi
 }
 
 trap 'on_error $LINENO' ERR
@@ -206,7 +220,7 @@ print_summary() {
   local ip
   ip="$(hostname -I | awk '{print $1}')"
 
-  cat <<EOF
+  cat >&3 <<EOF
 
 pyMC_Glass is installed.
 
