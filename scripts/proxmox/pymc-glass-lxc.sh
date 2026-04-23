@@ -33,6 +33,7 @@ var_tun="${var_tun:-yes}"
 
 header_info "$APP"
 variables
+NSAPP="pymc-glass"
 
 # Reuse the official docker-install stage so the CT is created with the same
 # Proxmox helper flow and gets a Docker-ready userspace before app deployment.
