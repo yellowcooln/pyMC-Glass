@@ -47,17 +47,19 @@ Simple management stack for pyMC repeaters (API + DB + MQTT + frontend).
    - `make prod-down`
 
 ## Proxmox LXC helper
-Run this on the Proxmox host to create an Ubuntu 24.04 LXC, enable Docker-friendly LXC features, and deploy `pyMC_Glass` inside it:
+Run this on the Proxmox host to create an Ubuntu 24.04 LXC and deploy `pyMC_Glass` inside it:
 
 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
 
-If you want verbose tracing while testing:
-
-`DEBUG=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
+The host-side script now uses the same `community-scripts` Proxmox helper flow for:
+- template storage selection
+- container storage selection
+- default vs advanced install prompts
+- Docker-safe LXC settings such as `nesting` and `keyctl`
 
 Common overrides:
-- `CTID=123 CT_HOSTNAME=pymc-glass STORAGE=local-lvm bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
-- `LXC_OSTYPE=ubuntu LXC_OSVERSION=24.04 FRONTEND_PORT=8081 API_PORT=8080 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
+- `CTID=123 HN=pymc-glass bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
+- `APP_REPO_BRANCH=main FRONTEND_PORT=8081 API_PORT=8080 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
 
 Defaults:
 - Ubuntu `24.04` template
@@ -67,4 +69,4 @@ Defaults:
 - Script source from `yellowcooln/pyMC-Glass` on `dev`
 - App deployment source from `pyMC-dev/pyMC-Glass` on `main`
 
-The host-side helper downloads and runs [`scripts/proxmox/install-pymc-glass-lxc.sh`](scripts/proxmox/install-pymc-glass-lxc.sh) inside the container. That installer sets production env files, installs Docker Engine and Compose, builds the stack, and creates a `pymc-glass-update` helper inside the LXC.
+The host-side helper first provisions the container through the official community-scripts Docker install flow, then runs [`scripts/proxmox/install-pymc-glass-lxc.sh`](scripts/proxmox/install-pymc-glass-lxc.sh) inside the container. That second stage clones `pyMC-Glass`, sets production env files, builds the stack, and creates a `pymc-glass-update` helper inside the LXC.
