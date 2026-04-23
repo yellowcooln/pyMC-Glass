@@ -8,7 +8,7 @@ SCRIPT_REPO_BRANCH="${SCRIPT_REPO_BRANCH:-dev}"
 SCRIPT_RAW_BASE_URL="${SCRIPT_RAW_BASE_URL:-https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/${SCRIPT_REPO_BRANCH}}"
 INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-${SCRIPT_RAW_BASE_URL}/scripts/proxmox/install-pymc-glass-lxc.sh}"
 CTID="${CTID:-}"
-HOSTNAME="${HOSTNAME:-pymc-glass}"
+CT_HOSTNAME="${CT_HOSTNAME:-pymc-glass}"
 CORES="${CORES:-2}"
 MEMORY="${MEMORY:-4096}"
 DISK_GB="${DISK_GB:-16}"
@@ -16,8 +16,8 @@ SWAP="${SWAP:-1024}"
 BRIDGE="${BRIDGE:-vmbr0}"
 STORAGE="${STORAGE:-}"
 TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-}"
-OSTYPE="${OSTYPE:-ubuntu}"
-OSVERSION="${OSVERSION:-24.04}"
+LXC_OSTYPE="${LXC_OSTYPE:-ubuntu}"
+LXC_OSVERSION="${LXC_OSVERSION:-24.04}"
 UNPRIVILEGED="${UNPRIVILEGED:-1}"
 ONBOOT="${ONBOOT:-1}"
 IP_CONFIG="${IP_CONFIG:-dhcp}"
@@ -81,17 +81,19 @@ resolve_ctid() {
   if [[ -z "${CTID}" ]]; then
     CTID="$(pvesh get /cluster/nextid)"
   fi
-  pct status "${CTID}" >/dev/null 2>&1 && fail "container ${CTID} already exists"
+  if pct status "${CTID}" >/dev/null 2>&1; then
+    fail "container ${CTID} already exists"
+  fi
 }
 
 resolve_template() {
-  TEMPLATE_NAME="$(pveam available --section system | awk -v os="${OSTYPE}" -v ver="${OSVERSION}" '$2 ~ ("^" os "-" ver "-standard_") {print $2}' | tail -n1)"
+  TEMPLATE_NAME="$(pveam available --section system | awk -v os="${LXC_OSTYPE}" -v ver="${LXC_OSVERSION}" '$2 ~ ("^" os "-" ver "-standard_") {print $2}' | tail -n1)"
   if [[ -z "${TEMPLATE_NAME}" ]]; then
     log "Refreshing template catalog"
     pveam update
-    TEMPLATE_NAME="$(pveam available --section system | awk -v os="${OSTYPE}" -v ver="${OSVERSION}" '$2 ~ ("^" os "-" ver "-standard_") {print $2}' | tail -n1)"
+    TEMPLATE_NAME="$(pveam available --section system | awk -v os="${LXC_OSTYPE}" -v ver="${LXC_OSVERSION}" '$2 ~ ("^" os "-" ver "-standard_") {print $2}' | tail -n1)"
   fi
-  [[ -n "${TEMPLATE_NAME}" ]] || fail "unable to find ${OSTYPE} ${OSVERSION} template via pveam"
+  [[ -n "${TEMPLATE_NAME}" ]] || fail "unable to find ${LXC_OSTYPE} ${LXC_OSVERSION} template via pveam"
 
   if ! pveam list "${TEMPLATE_STORAGE}" | grep -Fq "${TEMPLATE_NAME}"; then
     log "Downloading ${TEMPLATE_NAME} to ${TEMPLATE_STORAGE}"
@@ -102,11 +104,11 @@ resolve_template() {
 }
 
 create_container() {
-  log "Creating CT ${CTID} (${HOSTNAME})"
+  log "Creating CT ${CTID} (${CT_HOSTNAME})"
 
   local args=(
     "${CTID}" "${TEMPLATE_PATH}"
-    --hostname "${HOSTNAME}"
+    --hostname "${CT_HOSTNAME}"
     --cores "${CORES}"
     --memory "${MEMORY}"
     --swap "${SWAP}"
@@ -115,7 +117,7 @@ create_container() {
     --features "${FEATURES}"
     --unprivileged "${UNPRIVILEGED}"
     --onboot "${ONBOOT}"
-    --ostype "${OSTYPE}"
+    --ostype "${LXC_OSTYPE}"
   )
 
   if [[ -n "${PASSWORD}" ]]; then
@@ -180,7 +182,7 @@ print_summary() {
 ${APP_NAME} LXC created successfully.
 
 CTID: ${CTID}
-Hostname: ${HOSTNAME}
+Hostname: ${CT_HOSTNAME}
 URL: http://${ip:-<container-ip>}:${FRONTEND_PORT}
 API: http://${ip:-<container-ip>}:${API_PORT}/healthz
 
