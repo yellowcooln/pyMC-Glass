@@ -48,8 +48,73 @@ var_install="docker-install"
 color
 catch_errors
 
+plain_output_theme() {
+  TAB="  "
+  TAB3="      "
+  CM="[OK]"
+  CROSS="[ERROR]"
+  INFO="[INFO]"
+  OS="OS:"
+  HOSTNAME="Hostname:"
+  NETWORK="Network:"
+  GATEWAY="URL:"
+  DEFAULT="[DEFAULT]"
+  ADVANCED="[ADVANCED]"
+  CREATING=""
+}
+
+msg_info() {
+  local msg="$1"
+  [[ -z "$msg" ]] && return
+  if ! declare -p MSG_INFO_SHOWN &>/dev/null || ! declare -A MSG_INFO_SHOWN &>/dev/null; then
+    declare -gA MSG_INFO_SHOWN=()
+  fi
+  [[ -n "${MSG_INFO_SHOWN["$msg"]+x}" ]] && return
+  MSG_INFO_SHOWN["$msg"]=1
+  log_msg "[INFO] $msg"
+  stop_spinner
+  echo "[INFO] $msg"
+}
+
+msg_ok() {
+  local msg="$1"
+  [[ -z "$msg" ]] && return
+  stop_spinner
+  clear_line
+  echo "[OK] $msg"
+  log_msg "[OK] $msg"
+}
+
+msg_warn() {
+  local msg="$1"
+  [[ -z "$msg" ]] && return
+  stop_spinner
+  echo "[WARN] $msg" >&2
+  log_msg "[WARN] $msg"
+}
+
+msg_error() {
+  local msg="$1"
+  [[ -z "$msg" ]] && return
+  stop_spinner
+  echo "[ERROR] $msg" >&2
+  log_msg "[ERROR] $msg"
+}
+
+msg_custom() {
+  local _symbol="${1:-}"
+  local _color="${2:-}"
+  local msg="${3:-}"
+  [[ -z "$msg" ]] && return
+  stop_spinner
+  echo "$msg"
+  log_msg "$msg"
+}
+
+plain_output_theme
+
 run_app_installer() {
-  msg_info "Deploying pyMC_Glass into CT ${CTID}"
+  msg_info "Deploying pyMC-Glass into CT ${CTID}"
   pct exec "${CTID}" -- env \
     APP_REPO_URL="${APP_REPO_URL}" \
     APP_REPO_BRANCH="${APP_REPO_BRANCH}" \
@@ -61,10 +126,10 @@ run_app_installer() {
     POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
     ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
     bash -c 'curl -fsSL "$0" | bash' "${INSTALL_SCRIPT_URL}" || {
-    msg_error "pyMC_Glass deployment failed inside CT ${CTID}"
+    msg_error "pyMC-Glass deployment failed inside CT ${CTID}"
     exit 1
   }
-  msg_ok "pyMC_Glass deployed"
+  msg_ok "pyMC-Glass deployed"
 }
 
 function update_script() {
@@ -88,11 +153,11 @@ run_app_installer
 description
 
 msg_ok "Completed successfully!\n"
-echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:${FRONTEND_PORT}${CL}"
-echo -e "${INFO}${YW} Backend health endpoint:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:${API_PORT}/healthz${CL}"
-echo -e "${INFO}${YW} Default login:${CL}"
-echo -e "${TAB}${BGN}Username: ${ADMIN_EMAIL}${CL}"
-echo -e "${TAB}${BGN}Password: ${ADMIN_PASSWORD}${CL}"
+echo "pyMC-Glass setup has been successfully initialized."
+echo "URL:"
+echo "  http://${IP}:${FRONTEND_PORT}"
+echo "Backend health endpoint:"
+echo "  http://${IP}:${API_PORT}/healthz"
+echo "Default login:"
+echo "  Username: ${ADMIN_EMAIL}"
+echo "  Password: ${ADMIN_PASSWORD}"
