@@ -113,6 +113,8 @@ install_base_packages() {
 write_custom_profile() {
   local profile_file
   profile_file="/etc/profile.d/00_lxc-details.sh"
+  local motd_file
+  motd_file="/etc/motd"
 
   log "Writing pyMC-Glass container profile"
   cat >"${profile_file}" <<'EOF'
@@ -125,6 +127,12 @@ echo "  Hostname: $(hostname)"
 echo "  IP Address: $(hostname -I | awk '{print $1}')"
 EOF
   chmod 0644 "${profile_file}"
+
+  cat >"${motd_file}" <<'EOF'
+pyMC-Glass LXC Container
+  GitHub: https://github.com/pyMC-dev/pyMC-Glass
+EOF
+  chmod 0644 "${motd_file}"
 }
 
 install_docker() {
@@ -201,6 +209,29 @@ EOF
 
 write_update_helper() {
   log "Installing update helper"
+  cat >/usr/local/bin/pymc-glass-refresh-profile <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cat >/etc/profile.d/00_lxc-details.sh <<'INNER'
+echo ""
+echo "pyMC-Glass LXC Container"
+echo "  GitHub: https://github.com/pyMC-dev/pyMC-Glass"
+echo ""
+echo "  OS: $(grep ^NAME /etc/os-release | cut -d= -f2 | tr -d '"') - Version: $(grep ^VERSION_ID /etc/os-release | cut -d= -f2 | tr -d '"')"
+echo "  Hostname: $(hostname)"
+echo "  IP Address: $(hostname -I | awk '{print $1}')"
+INNER
+chmod 0644 /etc/profile.d/00_lxc-details.sh
+
+cat >/etc/motd <<'INNER'
+pyMC-Glass LXC Container
+  GitHub: https://github.com/pyMC-dev/pyMC-Glass
+INNER
+chmod 0644 /etc/motd
+EOF
+  chmod 0755 /usr/local/bin/pymc-glass-refresh-profile
+
   cat >/usr/local/bin/pymc-glass-update <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -210,6 +241,7 @@ git fetch --depth 1 origin "${APP_REPO_BRANCH}"
 git checkout -f "${APP_REPO_BRANCH}"
 git reset --hard "origin/${APP_REPO_BRANCH}"
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.lxc.yml up -d --build
+/usr/local/bin/pymc-glass-refresh-profile
 EOF
   chmod 0755 /usr/local/bin/pymc-glass-update
 
