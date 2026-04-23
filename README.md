@@ -54,12 +54,13 @@ Run this on the Proxmox host to create an Ubuntu 24.04 LXC and deploy `pyMC_Glas
 The host-side script now uses the same `community-scripts` Proxmox helper flow for:
 - template storage selection
 - container storage selection
-- default vs advanced install prompts
+- full advanced install prompts for bridge/network mode, DHCP vs static IP, gateway, VLAN, MTU, DNS, and related LXC settings
 - Docker-safe LXC settings such as `nesting` and `keyctl`
 
 Common overrides:
 - `CTID=123 HN=pymc-glass bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
 - `APP_REPO_BRANCH=main FRONTEND_PORT=8081 API_PORT=8080 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
+- `mode=default bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"` if you want the shorter helper flow instead
 
 Defaults:
 - Ubuntu `24.04` template

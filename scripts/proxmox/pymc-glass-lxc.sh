@@ -16,8 +16,9 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@pymc.glass}"
 ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME:-Admin}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+mode="${mode:-advanced}"
 
-# Community-scripts LXC defaults. Storage/template selection is handled by build.func.
+# Community-scripts LXC defaults. Storage/template/network selection is handled by build.func.
 var_tags="${var_tags:-docker;pymc-glass}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-4096}"
