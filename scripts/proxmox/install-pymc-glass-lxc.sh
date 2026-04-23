@@ -110,6 +110,23 @@ install_base_packages() {
   apt-get install -y ca-certificates curl git gnupg make openssl
 }
 
+write_custom_profile() {
+  local profile_file
+  profile_file="/etc/profile.d/00_lxc-details.sh"
+
+  log "Writing pyMC-Glass container profile"
+  cat >"${profile_file}" <<'EOF'
+echo ""
+echo "pyMC-Glass LXC Container"
+echo "  GitHub: https://github.com/pyMC-dev/pyMC-Glass"
+echo ""
+echo "  OS: $(grep ^NAME /etc/os-release | cut -d= -f2 | tr -d '"') - Version: $(grep ^VERSION_ID /etc/os-release | cut -d= -f2 | tr -d '"')"
+echo "  Hostname: $(hostname)"
+echo "  IP Address: $(hostname -I | awk '{print $1}')"
+EOF
+  chmod 0644 "${profile_file}"
+}
+
 install_docker() {
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     log "Docker Engine already present"
@@ -257,6 +274,7 @@ main() {
   write_update_helper
   deploy_stack
   wait_for_health
+  write_custom_profile
   print_summary
 }
 

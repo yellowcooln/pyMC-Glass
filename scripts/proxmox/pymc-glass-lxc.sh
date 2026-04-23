@@ -3,7 +3,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Copyright (c) 2026 yellowcooln
 # License: MIT
 
-APP="pyMC_Glass"
+APP="pyMC-Glass"
 APP_REPO_URL="${APP_REPO_URL:-${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}}"
 APP_REPO_BRANCH="${APP_REPO_BRANCH:-${REPO_BRANCH:-main}}"
 SCRIPT_REPO_BRANCH="${SCRIPT_REPO_BRANCH:-dev}"
@@ -31,9 +31,15 @@ var_nesting="${var_nesting:-1}"
 var_keyctl="${var_keyctl:-1}"
 var_tun="${var_tun:-yes}"
 
+header_info() {
+  clear
+  echo
+  echo "pyMC-Glass LXC Installer"
+  echo
+}
+
 header_info "$APP"
 variables
-NSAPP="pymc-glass"
 
 # Reuse the official docker-install stage so the CT is created with the same
 # Proxmox helper flow and gets a Docker-ready userspace before app deployment.
