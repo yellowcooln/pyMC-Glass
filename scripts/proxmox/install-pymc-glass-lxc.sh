@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 APP_REPO_URL="${APP_REPO_URL:-${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}}"
 APP_REPO_BRANCH="${APP_REPO_BRANCH:-${REPO_BRANCH:-main}}"
@@ -12,6 +12,10 @@ ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME:-Admin}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
+if [[ "${DEBUG:-0}" == "1" ]]; then
+  set -x
+fi
+
 log() {
   printf '[pyMC_Glass] %s\n' "$*"
 }
@@ -20,6 +24,12 @@ fail() {
   printf '[pyMC_Glass] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+on_error() {
+  printf '[pyMC_Glass] ERROR: failed at line %s\n' "$1" >&2
+}
+
+trap 'on_error $LINENO' ERR
 
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
@@ -213,6 +223,7 @@ EOF
 }
 
 main() {
+  log "Starting in-container installer"
   require_root
   detect_os
   install_base_packages

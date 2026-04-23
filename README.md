@@ -51,6 +51,10 @@ Run this on the Proxmox host to create an Ubuntu 24.04 LXC, enable Docker-friend
 
 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
 
+If you want verbose tracing while testing:
+
+`DEBUG=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
+
 Common overrides:
 - `CTID=123 HOSTNAME=pymc-glass STORAGE=local-lvm bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
 - `SCRIPT_REPO_BRANCH=dev APP_REPO_BRANCH=main FRONTEND_PORT=8081 API_PORT=8080 bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"`
