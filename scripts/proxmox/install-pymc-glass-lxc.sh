@@ -10,7 +10,7 @@ API_PORT="${API_PORT:-8080}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@pymc.glass}"
 ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME:-Admin}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin12345678}"
 INSTALL_LOG_FILE="${INSTALL_LOG_FILE:-/var/log/pymc-glass-install.log}"
 
 exec 3>&1
@@ -157,10 +157,6 @@ prepare_env_files() {
   if [[ -z "${POSTGRES_PASSWORD}" ]]; then
     POSTGRES_PASSWORD="$(random_password 32)"
   fi
-  if [[ -z "${ADMIN_PASSWORD}" ]]; then
-    ADMIN_PASSWORD="$(random_password 24)"
-  fi
-
   replace_env_value "${compose_env}" "POSTGRES_PASSWORD" "${POSTGRES_PASSWORD}"
   replace_env_value "${backend_env}" "DATABASE_URL" "postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/pymc_glass"
   replace_env_value "${backend_env}" "BOOTSTRAP_SEED_ADMIN_EMAIL" "${ADMIN_EMAIL}"

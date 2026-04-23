@@ -69,6 +69,7 @@ Defaults:
 - TUN/TAP enabled by default for Tailscale/VPN use
 - `2` cores, `4096` MB RAM, `16` GB disk
 - Frontend on port `80`, backend health/API on port `8080`
+- Default login `admin@pymc.glass` / `admin12345678`
 - Script source from `yellowcooln/pyMC-Glass` on `dev`
 - App deployment source from `pyMC-dev/pyMC-Glass` on `main`
 
