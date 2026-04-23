@@ -38,6 +38,19 @@ header_info() {
   echo
 }
 
+whiptail() {
+  local args=()
+  local arg
+  for arg in "$@"; do
+    arg="${arg//Proxmox VE Helper Scripts/pyMC-Glass LXC Installer}"
+    arg="${arg//Community-Scripts Options/pyMC-Glass Installer Options}"
+    arg="${arg//Community-Scripts SETTINGS Menu/pyMC-Glass Installer Settings}"
+    arg="${arg//Community-Scripts/pyMC-Glass}"
+    args+=("${arg}")
+  done
+  command whiptail "${args[@]}"
+}
+
 header_info "$APP"
 variables
 
