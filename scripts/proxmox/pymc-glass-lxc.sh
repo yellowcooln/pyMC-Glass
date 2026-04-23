@@ -2,10 +2,11 @@
 set -euo pipefail
 
 APP_NAME="pyMC_Glass"
-REPO_URL="${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
-RAW_BASE_URL="${RAW_BASE_URL:-https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/${REPO_BRANCH}}"
-INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-${RAW_BASE_URL}/scripts/proxmox/install-pymc-glass-lxc.sh}"
+APP_REPO_URL="${APP_REPO_URL:-${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}}"
+APP_REPO_BRANCH="${APP_REPO_BRANCH:-${REPO_BRANCH:-main}}"
+SCRIPT_REPO_BRANCH="${SCRIPT_REPO_BRANCH:-dev}"
+SCRIPT_RAW_BASE_URL="${SCRIPT_RAW_BASE_URL:-https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/${SCRIPT_REPO_BRANCH}}"
+INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-${SCRIPT_RAW_BASE_URL}/scripts/proxmox/install-pymc-glass-lxc.sh}"
 CTID="${CTID:-}"
 HOSTNAME="${HOSTNAME:-pymc-glass}"
 CORES="${CORES:-2}"
@@ -144,8 +145,8 @@ wait_for_network() {
 run_installer() {
   log "Running the in-container installer"
   pct exec "${CTID}" -- env \
-    REPO_URL="${REPO_URL}" \
-    REPO_BRANCH="${REPO_BRANCH}" \
+    APP_REPO_URL="${APP_REPO_URL}" \
+    APP_REPO_BRANCH="${APP_REPO_BRANCH}" \
     APP_DIR="${APP_DIR}" \
     FRONTEND_PORT="${FRONTEND_PORT}" \
     API_PORT="${API_PORT}" \

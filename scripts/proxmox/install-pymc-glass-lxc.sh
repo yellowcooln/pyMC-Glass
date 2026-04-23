@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
+APP_REPO_URL="${APP_REPO_URL:-${REPO_URL:-https://github.com/pyMC-dev/pyMC-Glass.git}}"
+APP_REPO_BRANCH="${APP_REPO_BRANCH:-${REPO_BRANCH:-main}}"
 APP_DIR="${APP_DIR:-/opt/pymc-glass}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pymc-glass}"
 FRONTEND_PORT="${FRONTEND_PORT:-80}"
@@ -103,15 +103,15 @@ install_docker() {
 checkout_repo() {
   if [[ -d "${APP_DIR}/.git" ]]; then
     log "Updating repository in ${APP_DIR}"
-    git -C "${APP_DIR}" fetch --depth 1 origin "${REPO_BRANCH}"
-    git -C "${APP_DIR}" checkout -f "${REPO_BRANCH}"
-    git -C "${APP_DIR}" reset --hard "origin/${REPO_BRANCH}"
+    git -C "${APP_DIR}" fetch --depth 1 origin "${APP_REPO_BRANCH}"
+    git -C "${APP_DIR}" checkout -f "${APP_REPO_BRANCH}"
+    git -C "${APP_DIR}" reset --hard "origin/${APP_REPO_BRANCH}"
     return
   fi
 
-  log "Cloning ${REPO_URL} (${REPO_BRANCH}) into ${APP_DIR}"
+  log "Cloning ${APP_REPO_URL} (${APP_REPO_BRANCH}) into ${APP_DIR}"
   rm -rf "${APP_DIR}"
-  git clone --branch "${REPO_BRANCH}" --depth 1 "${REPO_URL}" "${APP_DIR}"
+  git clone --branch "${APP_REPO_BRANCH}" --depth 1 "${APP_REPO_URL}" "${APP_DIR}"
 }
 
 prepare_env_files() {
@@ -158,9 +158,9 @@ write_update_helper() {
 set -euo pipefail
 
 cd "${APP_DIR}"
-git fetch --depth 1 origin "${REPO_BRANCH}"
-git checkout -f "${REPO_BRANCH}"
-git reset --hard "origin/${REPO_BRANCH}"
+git fetch --depth 1 origin "${APP_REPO_BRANCH}"
+git checkout -f "${APP_REPO_BRANCH}"
+git reset --hard "origin/${APP_REPO_BRANCH}"
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.lxc.yml up -d --build
 EOF
   chmod 0755 /usr/local/bin/pymc-glass-update
