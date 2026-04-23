@@ -25,9 +25,11 @@ var_ram="${var_ram:-4096}"
 var_disk="${var_disk:-16}"
 var_os="${var_os:-ubuntu}"
 var_version="${var_version:-24.04}"
+var_hostname="${var_hostname:-pymc-glass}"
 var_unprivileged="${var_unprivileged:-1}"
 var_nesting="${var_nesting:-1}"
 var_keyctl="${var_keyctl:-1}"
+var_tun="${var_tun:-yes}"
 
 header_info "$APP"
 variables

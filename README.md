@@ -63,8 +63,10 @@ Common overrides:
 - `mode=default bash -c "$(curl -fsSL https://raw.githubusercontent.com/yellowcooln/pyMC-Glass/dev/scripts/proxmox/pymc-glass-lxc.sh)"` if you want the shorter helper flow instead
 
 Defaults:
+- Hostname `pymc-glass`
 - Ubuntu `24.04` template
 - Unprivileged LXC with `nesting=1,keyctl=1`
+- TUN/TAP enabled by default for Tailscale/VPN use
 - `2` cores, `4096` MB RAM, `16` GB disk
 - Frontend on port `80`, backend health/API on port `8080`
 - Script source from `yellowcooln/pyMC-Glass` on `dev`
