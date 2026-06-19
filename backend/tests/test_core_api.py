@@ -372,6 +372,7 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
             "mqtt_broker_port": 2883,
             "mqtt_base_topic": "glass-prod",
             "mqtt_tls_enabled": True,
+            "mqtt_broker_additional_hosts": ["100.64.0.10", "glass.example.com"],
             "queue_to_repeaters": True,
             "reason": "fix broker host",
         },
@@ -381,12 +382,20 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
     assert update.json()["queued_commands"] == 2
     assert update.json()["settings"]["mqtt_broker_host"] == "mqtt.internal.example"
     assert update.json()["settings"]["mqtt_base_topic"] == "glass-prod"
+    assert update.json()["settings"]["mqtt_broker_additional_hosts"] == [
+        "100.64.0.10",
+        "glass.example.com",
+    ]
 
     loaded = client.get("/api/system-settings/mqtt-managed", headers=headers)
     assert loaded.status_code == 200
     assert loaded.json()["mqtt_broker_host"] == "mqtt.internal.example"
     assert loaded.json()["mqtt_broker_port"] == 2883
     assert loaded.json()["mqtt_tls_enabled"] is True
+    assert loaded.json()["mqtt_broker_additional_hosts"] == [
+        "100.64.0.10",
+        "glass.example.com",
+    ]
     assert loaded.json()["source"] == "override"
 
     settings = get_settings()
@@ -394,7 +403,10 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
     cert = x509.load_pem_x509_certificate(broker_cert_path.read_bytes())
     san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     dns_names = set(san.get_values_for_type(x509.DNSName))
+    ip_names = {str(name) for name in san.get_values_for_type(x509.IPAddress)}
     assert "mqtt.internal.example" in dns_names
+    assert "glass.example.com" in dns_names
+    assert "100.64.0.10" in ip_names
 
     commands = client.get("/api/commands?limit=20", headers=headers)
     assert commands.status_code == 200
@@ -406,6 +418,7 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
         == "mqtt.internal.example"
     ]
     assert len(managed_commands) == 2
+    assert "mqtt_broker_additional_hosts" not in managed_commands[0]["params"]["config"]["glass_managed"]
 
 
 def test_packets_list_supports_filters(client) -> None:
