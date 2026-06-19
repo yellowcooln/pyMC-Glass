@@ -220,6 +220,7 @@ const navItems: NavItem[] = [
       { id: "fleet-repeaters", label: "Repeaters", to: "/repeaters", icon: "repeaters" },
       { id: "fleet-adoption", label: "Adoption", to: "/adoption", icon: "adoption" },
       { id: "fleet-commands", label: "Commands", to: "/commands", icon: "commands" },
+      { id: "fleet-repeater-policies", label: "Runtime Policy", to: "/repeater-policies", icon: "policy" },
       { id: "fleet-map", label: "Map", to: "/map", icon: "map" },
     ],
   },

@@ -13,6 +13,7 @@ import InsightsTopologyView from "../views/InsightsTopologyView.vue";
 import MapView from "../views/MapView.vue";
 import RepeaterDetailView from "../views/RepeaterDetailView.vue";
 import RepeatersView from "../views/RepeatersView.vue";
+import RepeaterPoliciesView from "../views/RepeaterPoliciesView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import TransportKeysView from "../views/TransportKeysView.vue";
 import UsersView from "../views/UsersView.vue";
@@ -45,6 +46,7 @@ const routes = [
       { path: "repeaters/:repeaterId", name: "repeater-detail", component: RepeaterDetailView },
       { path: "adoption", name: "adoption", component: AdoptionView },
       { path: "commands", name: "commands", component: CommandsView },
+      { path: "repeater-policies", name: "repeater-policies", component: RepeaterPoliciesView },
       { path: "transport-keys", name: "transport-keys", component: TransportKeysView },
       { path: "settings", name: "settings", component: SettingsView },
       { path: "audit", name: "audit", component: AuditView },

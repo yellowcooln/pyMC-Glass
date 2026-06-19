@@ -421,6 +421,81 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
     assert "mqtt_broker_additional_hosts" not in managed_commands[0]["params"]["config"]["glass_managed"]
 
 
+def test_repeater_policy_template_validate_and_sync(client) -> None:
+    _bootstrap_admin(client)
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    connected = client.post(
+        "/api/repeaters",
+        json={
+            "node_name": "policy-node-1",
+            "pubkey": "0x" + "E1" * 32,
+            "status": "connected",
+            "firmware_version": "1.0.0",
+        },
+        headers=headers,
+    )
+    pending = client.post(
+        "/api/repeaters",
+        json={
+            "node_name": "policy-node-pending",
+            "pubkey": "0x" + "E2" * 32,
+            "status": "pending_adoption",
+            "firmware_version": "1.0.0",
+        },
+        headers=headers,
+    )
+    assert connected.status_code == 201
+    assert pending.status_code == 201
+
+    policy = {
+        "enabled": True,
+        "default_action": "allow",
+        "rules": [
+            {
+                "name": "Drop blocked channel text",
+                "if": {"all": [{"field": "channel_message_body", "op": "contains", "value": "blocked"}]},
+                "then": {"action": "drop"},
+            }
+        ],
+        "objects": {"channel_hash_groups": {"blocked": ["0x12"]}},
+    }
+    validation = client.post("/api/repeater-policies/validate", json={"policy": policy}, headers=headers)
+    assert validation.status_code == 200
+    assert validation.json()["valid"] is True
+    assert validation.json()["normalized_policy"]["rules"][0]["then"]["action"] == "drop"
+
+    created = client.post(
+        "/api/repeater-policies/templates",
+        json={"name": "Drop blocked", "description": "packet policy", "enabled": True, "policy": policy},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    template_id = created.json()["id"]
+
+    synced = client.post(
+        "/api/repeater-policies/sync",
+        json={"template_id": template_id, "all_repeaters": True, "mode": "replace"},
+        headers=headers,
+    )
+    assert synced.status_code == 200
+    assert synced.json()["queued_commands"] == 1
+    assert synced.json()["statuses"][0]["node_name"] == "policy-node-1"
+    assert synced.json()["statuses"][0]["status"] == "queued"
+
+    commands = client.get("/api/commands?limit=10", headers=headers)
+    assert commands.status_code == 200
+    policy_commands = [item for item in commands.json() if item["action"] == "policy_sync"]
+    assert len(policy_commands) == 1
+    assert policy_commands[0]["params"]["template_id"] == template_id
+    assert policy_commands[0]["params"]["policy"]["default_action"] == "allow"
+
+    statuses = client.get("/api/repeater-policies/sync-status", headers=headers)
+    assert statuses.status_code == 200
+    assert statuses.json()[0]["command_id"] == policy_commands[0]["command_id"]
+
+
 def test_packets_list_supports_filters(client) -> None:
     _bootstrap_admin(client)
     token = _login(client)

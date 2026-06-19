@@ -941,3 +941,67 @@ export interface ConfigSnapshotEncryptionKeyGenerateResponse {
   settings: ConfigSnapshotEncryptionSettingsResponse;
   generated_entry: string;
 }
+
+export interface RepeaterPolicyTemplateResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  policy: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RepeaterPolicyTemplateCreateRequest {
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+  policy: Record<string, unknown>;
+}
+
+export interface RepeaterPolicyTemplateUpdateRequest {
+  name?: string;
+  description?: string | null;
+  enabled?: boolean;
+  policy?: Record<string, unknown>;
+}
+
+export interface RepeaterPolicyValidateRequest {
+  policy: Record<string, unknown>;
+}
+
+export interface RepeaterPolicyValidateResponse {
+  valid: boolean;
+  errors: string[];
+  normalized_policy: Record<string, unknown> | null;
+}
+
+export interface RepeaterPolicySyncRequest {
+  template_id?: string;
+  policy?: Record<string, unknown>;
+  repeater_ids?: string[];
+  all_repeaters?: boolean;
+  mode?: "replace" | "patch";
+  validate_only?: boolean;
+  reason?: string;
+}
+
+export interface RepeaterPolicySyncStatusResponse {
+  repeater_id: string;
+  node_name: string;
+  template_id: string | null;
+  command_id: string | null;
+  payload_hash: string | null;
+  status: string;
+  error_message: string | null;
+  queued_at: string | null;
+  dispatched_at: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+}
+
+export interface RepeaterPolicySyncResponse {
+  queued_commands: number;
+  command_ids: string[];
+  statuses: RepeaterPolicySyncStatusResponse[];
+}

@@ -19,6 +19,7 @@ from app.api.routes.inform import router as inform_router
 from app.api.routes.insights import router as insights_router
 from app.api.routes.packets import router as packets_router
 from app.api.routes.repeaters import router as repeaters_router
+from app.api.routes.repeater_policy import router as repeater_policy_router
 from app.api.routes.smoke import router as smoke_router
 from app.api.routes.system_settings import router as system_settings_router
 from app.api.routes.telemetry import router as telemetry_router
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(alert_policy_router, tags=["alert-policies"])
     app.include_router(node_groups_router, tags=["node-groups"])
     app.include_router(transport_keys_router, tags=["transport-keys"])
+    app.include_router(repeater_policy_router, tags=["repeater-policies"])
     app.include_router(audit_router, tags=["audit"])
     app.include_router(users_router, tags=["users"])
     app.include_router(smoke_router, tags=["smoke"])
