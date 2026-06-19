@@ -898,6 +898,7 @@ export interface ManagedMqttSettingsResponse {
   mqtt_broker_port: number;
   mqtt_base_topic: string;
   mqtt_tls_enabled: boolean;
+  mqtt_broker_additional_hosts: string[];
   source: string;
   updated_at: string | null;
 }
@@ -908,6 +909,7 @@ export interface ManagedMqttSettingsUpdateRequest {
   mqtt_broker_port: number;
   mqtt_base_topic: string;
   mqtt_tls_enabled: boolean;
+  mqtt_broker_additional_hosts?: string[];
   queue_to_repeaters?: boolean;
   reason?: string;
 }

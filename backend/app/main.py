@@ -44,13 +44,20 @@ async def lifespan(_: FastAPI):
     session_factory = get_session_factory()
     seed_default_admin_if_needed(settings, session_factory)
     managed_mqtt_host = ""
+    managed_mqtt_additional_hosts: list[str] = []
     with session_factory() as db:
         managed_mqtt_settings, _, _ = get_effective_managed_mqtt_settings(db)
         managed_mqtt_host = str(managed_mqtt_settings.get("mqtt_broker_host", "")).strip()
+        managed_mqtt_additional_hosts = [
+            str(host).strip()
+            for host in managed_mqtt_settings.get("mqtt_broker_additional_hosts", [])
+            if str(host).strip()
+        ]
     pki_service = PkiService(settings)
     pki_service.ensure_ca()
     pki_service.ensure_mqtt_broker_server_certificate(
-        extra_san_hosts=[managed_mqtt_host] if managed_mqtt_host else None
+        extra_san_hosts=([managed_mqtt_host] if managed_mqtt_host else [])
+        + managed_mqtt_additional_hosts
     )
     pki_service.ensure_backend_mqtt_client_certificate()
     mqtt_ingest = MqttIngestService(
