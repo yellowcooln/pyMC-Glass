@@ -128,7 +128,7 @@
     </ul>
 
     <footer class="sidebar-footer">
-      <p class="footer-text">Mesh fleet orchestration</p>
+      <p class="footer-text">Mesh network orchestration</p>
     </footer>
   </nav>
 </template>
@@ -214,7 +214,7 @@ const navItems: NavItem[] = [
   },
   {
     id: "fleet",
-    label: "Fleet",
+    label: "Network",
     icon: "fleet",
     children: [
       { id: "fleet-repeaters", label: "Repeaters", to: "/repeaters", icon: "repeaters" },

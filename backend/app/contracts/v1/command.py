@@ -20,6 +20,7 @@ class CommandAction(str, Enum):
     export_config = "export_config"
     export_identity = "export_identity"
     run_diagnostic = "run_diagnostic"
+    transport_keys_sync = "transport_keys_sync"
 
 
 class QueueCommandRequestV1(BaseModel):

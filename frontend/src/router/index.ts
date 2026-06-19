@@ -39,6 +39,7 @@ const routes = [
       { path: "alert-policies/actions", name: "alert-policies-actions", component: AlertPoliciesView },
       { path: "alert-policies/evaluation", name: "alert-policies-evaluation", component: AlertPoliciesView },
       { path: "global-stats", name: "global-stats", component: GlobalStatsView },
+      { path: "insights/topology", redirect: "/insights-topology" },
       { path: "insights-topology", name: "insights-topology", component: InsightsTopologyView },
       { path: "repeaters", name: "repeaters", component: RepeatersView },
       { path: "repeaters/:repeaterId", name: "repeater-detail", component: RepeaterDetailView },

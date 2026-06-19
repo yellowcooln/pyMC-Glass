@@ -136,7 +136,8 @@ export type CommandAction =
   | "reboot"
   | "export_config"
   | "export_identity"
-  | "run_diagnostic";
+  | "run_diagnostic"
+  | "transport_keys_sync";
 
 export const COMMAND_ACTIONS: CommandAction[] = [
   "restart_service",
@@ -151,6 +152,7 @@ export const COMMAND_ACTIONS: CommandAction[] = [
   "export_config",
   "export_identity",
   "run_diagnostic",
+  "transport_keys_sync",
 ];
 
 export interface QueueCommandRequest {

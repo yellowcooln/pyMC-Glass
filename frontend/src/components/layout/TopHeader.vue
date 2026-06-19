@@ -3,7 +3,7 @@
     <div class="flex items-center gap-3">
       <button class="btn btn-ghost inline-flex xl:hidden" @click="$emit('toggle-menu')">☰</button>
       <div>
-        <h2 class="text-base font-semibold text-content-primary">Fleet Operations</h2>
+        <h2 class="text-base font-semibold text-content-primary">Network Operations</h2>
         <p class="text-xs text-content-muted">
           {{ appState.user?.display_name || appState.user?.email }} · role:
           {{ appState.user?.role }}

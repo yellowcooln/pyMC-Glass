@@ -17,7 +17,16 @@
         <form class="panel-form" @submit.prevent="queueEntry">
           <label class="field-label">
             Node name
-            <input v-model.trim="queueForm.node_name" class="field" required />
+            <select v-model="queueForm.node_name" class="field-select" :required="!queueForm.queueAll" :disabled="queueForm.queueAll">
+              <option value="">Select a repeater</option>
+              <option v-for="repeater in appState.repeaters" :key="repeater.id" :value="repeater.node_name">
+                {{ repeater.node_name }} · {{ repeater.status }}
+              </option>
+            </select>
+          </label>
+          <label class="toggle-row">
+            <input v-model="queueForm.queueAll" type="checkbox" />
+            <span>Queue to all repeaters</span>
           </label>
           <label class="field-label">
             Action
@@ -39,7 +48,7 @@
               placeholder='{"key":"value"}'
             />
           </label>
-          <button class="btn btn-primary" :disabled="!canOperate || appState.actionLoading">
+          <button class="btn btn-primary" :disabled="!canOperate || appState.actionLoading || (!queueForm.queueAll && !queueForm.node_name)">
             {{ appState.actionLoading ? "Queueing..." : "Queue command" }}
           </button>
         </form>
@@ -141,7 +150,9 @@ import {
   canOperate,
   formatTimestamp,
   loadCommandDetail,
+  queueBulkCommands,
   queueCommandEntry,
+  refreshAllData,
   refreshCommandsList,
 } from "../state/appState";
 
@@ -150,6 +161,7 @@ const queueForm = reactive({
   action: COMMAND_ACTIONS[0],
   paramsJson: "{}",
   reason: "",
+  queueAll: false,
 });
 
 const filters = reactive({
@@ -166,6 +178,9 @@ const detailError = ref<string | null>(null);
 
 onMounted(() => {
   window.addEventListener("keydown", handleEscapeKey);
+  if (appState.token && appState.repeaters.length === 0) {
+    void refreshAllData();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -184,13 +199,24 @@ async function queueEntry(): Promise<void> {
       }
     }
 
-    await queueCommandEntry({
-      node_name: queueForm.node_name,
-      action: queueForm.action,
-      params,
-      requested_by: appState.user?.email || "operator",
-      reason: queueForm.reason || undefined,
-    });
+    if (queueForm.queueAll) {
+      await queueBulkCommands(
+        appState.repeaters.map((repeater) => repeater.id),
+        {
+          action: queueForm.action,
+          params,
+          reason: queueForm.reason || undefined,
+        },
+      );
+    } else {
+      await queueCommandEntry({
+        node_name: queueForm.node_name,
+        action: queueForm.action,
+        params,
+        requested_by: appState.user?.email || "operator",
+        reason: queueForm.reason || undefined,
+      });
+    }
 
     queueForm.paramsJson = "{}";
     queueForm.reason = "";
