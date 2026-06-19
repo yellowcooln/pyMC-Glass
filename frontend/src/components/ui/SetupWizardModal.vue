@@ -54,7 +54,8 @@
       <template v-else-if="currentStep === 2">
         <div class="space-y-4">
           <p class="text-sm text-slate-400">
-            Enter the MQTT broker details that your repeaters will connect to.
+            Enter the MQTT broker that repeaters use to send telemetry to pyMC Glass. For a
+            Glass-hosted broker, use this Glass server's reachable hostname or IP.
           </p>
           <label class="field-label">
             Broker hostname or IP
