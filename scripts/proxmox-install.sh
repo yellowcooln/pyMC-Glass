@@ -271,6 +271,45 @@ MOTD
 chmod +x /etc/profile.d/pymc-glass-motd.sh"
 msg_ok "Login banner installed"
 
+msg_info "Installing container update helper and alias..."
+container_bash "
+    mkdir -p /usr/local/bin
+    cat > /usr/local/bin/pymc-glass-update <<'UPDATE'
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+APP_DIR='${APP_DIR}'
+COMPOSE_ARGS='--env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml'
+
+cd "$APP_DIR"
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " CHOSEN_BRANCH
+CHOSEN_BRANCH="${CHOSEN_BRANCH:-$CURRENT_BRANCH}"
+
+git fetch --all --prune
+
+if git show-ref --verify --quiet "refs/heads/${CHOSEN_BRANCH}"; then
+    git switch "$CHOSEN_BRANCH"
+else
+    git switch -c "$CHOSEN_BRANCH" "origin/${CHOSEN_BRANCH}"
+fi
+
+git pull --ff-only
+
+docker compose ${COMPOSE_ARGS} down
+
+docker compose ${COMPOSE_ARGS} up -d --build
+
+echo "Updated ${CHOSEN_BRANCH} and restarted services."
+UPDATE
+chmod +x /usr/local/bin/pymc-glass-update
+cat > /etc/profile.d/pymc-glass-update-alias.sh <<'ALIAS'
+alias pymc-glass-update='/usr/local/bin/pymc-glass-update'
+ALIAS"
+msg_ok "Update helper and alias installed"
+
 # ── Start pyMC Glass ───────────────────────────────────────────────────────
 msg_info "Starting pyMC Glass production stack (this can take several minutes)..."
 container_bash "
