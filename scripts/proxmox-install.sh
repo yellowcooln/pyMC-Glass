@@ -65,23 +65,27 @@ container_exec() {
     status=$(pct status "$CTID" 2>/dev/null || true)
     if [[ "$status" != *"status: running" ]]; then
         msg_info "Starting container ${CTID} before running command..."
-        pct start "$CTID" >/dev/null
+        if ! pct start "$CTID"; then
+            pct status "$CTID"
+            msg_error "Failed to start container ${CTID}."
+            exit 1
+        fi
 
         local attempt
-        for attempt in $(seq 1 30); do
+        for attempt in $(seq 1 45); do
+            sleep 1
             status=$(pct status "$CTID" 2>/dev/null || true)
             if [[ "$status" == *"status: running" ]]; then
                 break
             fi
-            sleep 1
         done
 
         status=$(pct status "$CTID" 2>/dev/null || true)
         if [[ "$status" != *"status: running" ]]; then
-            msg_error "Container ${CTID} failed to start (status: ${status:-unknown})."
-            pct stop "$CTID" 2>/dev/null || true
+            msg_error "Container ${CTID} did not reach running state (status: ${status:-unknown})."
             exit 1
         fi
+        msg_ok "Container ${CTID} is running"
     fi
 
     pct exec "$CTID" -- "$@"
