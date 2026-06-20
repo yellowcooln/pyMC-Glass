@@ -18,6 +18,7 @@
       <button class="btn btn-secondary" :disabled="appState.dataLoading" @click="refreshAllData()">
         {{ appState.dataLoading ? "Refreshing..." : "Refresh" }}
       </button>
+      <ThemeToggle />
       <button class="btn btn-danger" @click="logoutAccount">Logout</button>
     </div>
   </header>
@@ -25,6 +26,7 @@
 
 <script setup lang="ts">
 import { getApiBaseUrl } from "../../api";
+import ThemeToggle from "../ThemeToggle.vue";
 import { appState, formatTimestamp, logoutAccount, refreshAllData } from "../../state/appState";
 
 const apiBaseLabel = getApiBaseUrl();

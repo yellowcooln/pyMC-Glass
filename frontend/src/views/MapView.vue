@@ -84,6 +84,7 @@ import UiDataTable from "../components/ui/UiDataTable.vue";
 import UiStatCard from "../components/ui/UiStatCard.vue";
 
 import StatusPill from "../components/ui/StatusPill.vue";
+import { useTheme } from "../composables/useTheme";
 import { appState, refreshAllData } from "../state/appState";
 
 interface MapPoint {
@@ -96,8 +97,10 @@ interface MapPoint {
 }
 
 const mapElement = ref<HTMLElement | null>(null);
+const { theme } = useTheme();
 let map: L.Map | null = null;
 let markerLayer: L.LayerGroup | null = null;
+let tileLayer: L.TileLayer | null = null;
 
 function parseCoords(location: string | null): { lat: number; lng: number } | null {
   if (!location) {
@@ -190,12 +193,36 @@ onBeforeUnmount(() => {
     map.remove();
     map = null;
     markerLayer = null;
+    tileLayer = null;
   }
 });
 
 watch(mappedRepeaters, () => {
   void nextTick().then(renderMap);
 });
+
+watch(theme, () => {
+  updateTileLayer();
+});
+
+function mapTileUrl(): string {
+  return theme.value === "dark"
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+}
+
+function updateTileLayer(): void {
+  if (!map) return;
+  if (tileLayer) {
+    tileLayer.removeFrom(map);
+    tileLayer = null;
+  }
+  tileLayer = L.tileLayer(mapTileUrl(), {
+    maxZoom: 19,
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  }).addTo(map);
+}
 
 function renderMap(): void {
   if (!mapElement.value || mappedRepeaters.value.length === 0) {
@@ -207,10 +234,7 @@ function renderMap(): void {
       worldCopyJump: true,
       zoomControl: true,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    updateTileLayer();
     markerLayer = L.layerGroup().addTo(map);
   }
 
