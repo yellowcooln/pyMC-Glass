@@ -242,6 +242,61 @@
           </div>
           <textarea v-model="builder.objectsJson" class="field-textarea objects-json" spellcheck="false" @input="syncJsonFromBuilder" />
         </section>
+
+        <section class="policy-builder-section">
+          <div class="policy-section-header">
+            <div>
+              <h3 class="policy-section-title">Policy Groups</h3>
+              <p class="section-subtitle">Pre-stage Repeater dev policy groups; these update the policy objects JSON used by group references.</p>
+            </div>
+          </div>
+          <div class="grid-2">
+            <label class="field-label">
+              Group kind
+              <select v-model="groupForm.kind" class="field">
+                <option value="channel_hash_groups">Channel hash groups</option>
+                <option value="pubkey_groups">Pubkey groups</option>
+              </select>
+            </label>
+            <label class="field-label">
+              Group name
+              <input v-model.trim="groupForm.name" class="field" placeholder="blocked_channels" />
+            </label>
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-secondary" type="button" @click="addObjectGroup">Add group</button>
+            <button class="btn btn-danger" type="button" :disabled="!selectedObjectGroupName" @click="removeObjectGroup(selectedObjectGroupName)">Remove selected group</button>
+          </div>
+          <div v-if="objectGroupNames.length === 0" class="empty-state small">No {{ groupKindLabel(groupForm.kind) }} yet.</div>
+          <div v-else class="policy-group-list">
+            <button
+              v-for="name in objectGroupNames"
+              :key="name"
+              class="policy-group-chip"
+              :class="{ selected: selectedObjectGroupName === name }"
+              type="button"
+              @click="groupForm.name = name"
+            >
+              {{ name }} <span>{{ selectedObjectGroupValues(name).length }}</span>
+            </button>
+          </div>
+          <div class="grid-2">
+            <label class="field-label">
+              Entry value
+              <input v-model.trim="groupForm.entryValue" class="field" :placeholder="groupForm.kind === 'channel_hash_groups' ? '0x12 or 0x9CD8…' : '0xaabbccdd'" />
+            </label>
+            <div class="field-label group-entry-actions">
+              Add entry
+              <button class="btn btn-secondary" type="button" :disabled="!selectedObjectGroupName" @click="addObjectGroupEntry">Add to selected group</button>
+            </div>
+          </div>
+          <div v-if="selectedObjectGroupName" class="policy-group-entry-list">
+            <span v-for="entry in selectedObjectGroupValues(selectedObjectGroupName)" :key="entry" class="entry-pill">
+              {{ entry }}
+              <button type="button" @click="removeObjectGroupEntry(selectedObjectGroupName, entry)">×</button>
+            </span>
+          </div>
+        </section>
       </div>
 
       <div v-else>
@@ -321,7 +376,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 
 import {
   createRepeaterPolicyTemplate,
@@ -346,6 +401,7 @@ type Logic = "all" | "any";
 type EditorMode = "builder" | "json";
 type RuleValueType = "string" | "number" | "boolean";
 type ValueSource = "literal" | "group";
+type PolicyObjectGroupKind = "channel_hash_groups" | "pubkey_groups";
 
 type BuilderCondition = {
   localId: string;
@@ -440,6 +496,24 @@ const syncForm = reactive({
   mode: "replace" as "replace" | "patch",
   validateOnly: false,
   reason: "",
+});
+
+const groupForm = reactive({
+  kind: "channel_hash_groups" as PolicyObjectGroupKind,
+  name: "",
+  entryValue: "",
+});
+
+const policyObjects = computed<Record<string, unknown>>(() => parseObjectsJson());
+
+const objectGroupNames = computed(() => {
+  const groups = objectGroupsForKind(groupForm.kind);
+  return Object.keys(groups).sort((a, b) => a.localeCompare(b));
+});
+
+const selectedObjectGroupName = computed(() => {
+  const name = groupForm.name.trim();
+  return name && Object.prototype.hasOwnProperty.call(objectGroupsForKind(groupForm.kind), name) ? name : "";
 });
 
 onMounted(() => {
@@ -645,6 +719,98 @@ function moveCondition(ruleIndex: number, conditionIndex: number, delta: number)
   const [item] = conditions.splice(conditionIndex, 1);
   conditions.splice(nextIndex, 0, item);
   syncJsonFromBuilder();
+}
+
+function parseObjectsJson(): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(builder.objectsJson || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function objectGroupsForKind(kind: PolicyObjectGroupKind): Record<string, string[]> {
+  const raw = policyObjects.value[kind];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const output: Record<string, string[]> = {};
+  for (const [name, values] of Object.entries(raw as Record<string, unknown>)) {
+    if (Array.isArray(values)) {
+      output[name] = values.map((value) => String(value));
+    }
+  }
+  return output;
+}
+
+function selectedObjectGroupValues(name: string): string[] {
+  return objectGroupsForKind(groupForm.kind)[name] || [];
+}
+
+function addObjectGroup(): void {
+  const name = normalizeGroupName(groupForm.name);
+  if (!name) {
+    showErrorToast("Group name is required.");
+    return;
+  }
+  updateObjectGroups((objects) => {
+    const groups = ensureObjectGroupContainer(objects, groupForm.kind);
+    groups[name] = Array.isArray(groups[name]) ? groups[name] : [];
+  });
+  groupForm.name = name;
+}
+
+function removeObjectGroup(name: string): void {
+  if (!name) return;
+  updateObjectGroups((objects) => {
+    const groups = ensureObjectGroupContainer(objects, groupForm.kind);
+    delete groups[name];
+  });
+  groupForm.name = "";
+}
+
+function addObjectGroupEntry(): void {
+  const name = selectedObjectGroupName.value;
+  const entry = groupForm.entryValue.trim();
+  if (!name || !entry) {
+    showErrorToast("Select a group and enter a value.");
+    return;
+  }
+  updateObjectGroups((objects) => {
+    const groups = ensureObjectGroupContainer(objects, groupForm.kind);
+    const values = Array.isArray(groups[name]) ? groups[name].map((value) => String(value)) : [];
+    if (!values.includes(entry)) values.push(entry);
+    groups[name] = values;
+  });
+  groupForm.entryValue = "";
+}
+
+function removeObjectGroupEntry(name: string, entry: string): void {
+  updateObjectGroups((objects) => {
+    const groups = ensureObjectGroupContainer(objects, groupForm.kind);
+    groups[name] = (Array.isArray(groups[name]) ? groups[name] : []).filter((value) => String(value) !== entry);
+  });
+}
+
+function updateObjectGroups(mutator: (objects: Record<string, unknown>) => void): void {
+  const objects = JSON.parse(JSON.stringify(policyObjects.value || {})) as Record<string, unknown>;
+  mutator(objects);
+  builder.objectsJson = JSON.stringify(objects, null, 2);
+  syncJsonFromBuilder();
+}
+
+function ensureObjectGroupContainer(objects: Record<string, unknown>, kind: PolicyObjectGroupKind): Record<string, unknown[]> {
+  if (!objects[kind] || typeof objects[kind] !== "object" || Array.isArray(objects[kind])) {
+    objects[kind] = {};
+  }
+  return objects[kind] as Record<string, unknown[]>;
+}
+
+function normalizeGroupName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function groupKindLabel(kind: PolicyObjectGroupKind): string {
+  return kind === "channel_hash_groups" ? "channel hash groups" : "pubkey groups";
 }
 
 function newCondition(): BuilderCondition {
@@ -930,6 +1096,54 @@ function ruleCount(policy: Record<string, unknown>): number {
 
 .empty-state.small {
   padding: 0.7rem;
+}
+
+.policy-group-list,
+.policy-group-entry-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.policy-group-chip,
+.entry-pill {
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.policy-group-chip {
+  background: rgba(15, 23, 42, 0.55);
+  color: rgb(226 232 240);
+}
+
+.policy-group-chip.selected {
+  border-color: rgba(34, 211, 238, 0.7);
+  color: rgb(103 232 249);
+}
+
+.policy-group-chip span {
+  color: rgb(148 163 184);
+  font-size: 0.75rem;
+}
+
+.entry-pill {
+  background: rgba(34, 211, 238, 0.08);
+  color: rgb(226 232 240);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+}
+
+.entry-pill button {
+  color: rgb(248 113 113);
+}
+
+.group-entry-actions {
+  justify-content: end;
 }
 
 code {

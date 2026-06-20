@@ -92,6 +92,43 @@ def test_inform_persists_location_and_settings_for_detail(client) -> None:
     assert detail.json()["state"] == "forward"
 
 
+def test_inform_accepts_pre_staged_sensor_readings(client) -> None:
+    _bootstrap_admin(client)
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = _inform_payload("mesh-repeater-sensors")
+    payload["sensors"] = {
+        "enabled": True,
+        "configured": 2,
+        "loaded": 2,
+        "running": True,
+        "readings": [
+            {
+                "name": "ups-main",
+                "type": "waveshare_ups_d",
+                "ok": True,
+                "timestamp": "2026-06-20T12:00:00Z",
+                "data": {"battery_percent": 87.5, "voltage_v": 4.08, "current_ma": 120.0},
+            }
+        ],
+    }
+
+    first_inform = client.post("/inform", json=payload)
+    assert first_inform.status_code == 200
+
+    pending = client.get("/api/adoption/pending", headers=headers)
+    assert pending.status_code == 200
+    repeater_id = pending.json()[0]["id"]
+
+    detail = client.get(f"/api/repeaters/{repeater_id}/detail", headers=headers)
+    assert detail.status_code == 200
+    sensors = detail.json()["system"]["sensors"]
+    assert sensors["loaded"] == 2
+    assert sensors["readings"][0]["type"] == "waveshare_ups_d"
+    assert sensors["readings"][0]["data"]["battery_percent"] == 87.5
+
+
 def test_inform_extracts_location_from_repeater_latitude_longitude(client) -> None:
     _bootstrap_admin(client)
     token = _login(client)

@@ -134,6 +134,27 @@
               <strong>{{ formatInt(fieldNumber(detail.counters, "dropped")) }}</strong>
             </div>
           </div>
+          <div class="sensor-section">
+            <h3>Sensor / UPS Readings</h3>
+            <p v-if="sensorReadings.length === 0" class="section-subtitle">
+              No sensor readings reported yet. Glass is ready to accept repeater-provided sensor summaries.
+            </p>
+            <div v-else class="sensor-grid">
+              <div v-for="sensor in sensorReadings" :key="sensor.key" class="sensor-card">
+                <div class="sensor-title-row">
+                  <strong>{{ sensor.name }}</strong>
+                  <span class="sensor-type">{{ sensor.type }}</span>
+                </div>
+                <p class="section-subtitle">{{ sensor.ok ? "OK" : sensor.error || "Error" }} · {{ sensor.timestamp || "no timestamp" }}</p>
+                <div class="metric-grid compact-metrics">
+                  <div v-for="metric in sensor.metrics" :key="metric.key" class="metric-item">
+                    <span>{{ metric.label }}</span>
+                    <strong>{{ metric.value }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </article>
 
         <article class="glass-card panel">
@@ -291,6 +312,22 @@ interface GaugeMetric {
   color: string;
 }
 
+interface SensorMetric {
+  key: string;
+  label: string;
+  value: string;
+}
+
+interface SensorReadingDisplay {
+  key: string;
+  name: string;
+  type: string;
+  ok: boolean;
+  timestamp: string | null;
+  error: string | null;
+  metrics: SensorMetric[];
+}
+
 function diagnosticRowKey(entry: RepeaterCertDiagnosticLogResponse, index: number): string {
   return `${entry.timestamp}-${entry.source}-${entry.message}-${index}`;
 }
@@ -440,6 +477,12 @@ const systemGaugeMetrics = computed<GaugeMetric[]>(() => [
     color: "#c996ff",
   },
 ]);
+
+const sensorReadings = computed<SensorReadingDisplay[]>(() => {
+  const sensors = detail.value?.system?.sensors;
+  const readings = extractSensorReadings(sensors);
+  return readings.map((reading, index) => toSensorDisplay(reading, index));
+});
 
 watch(repeaterId, () => {
   void loadDetail();
@@ -620,6 +663,65 @@ function fieldNumber(source: Record<string, unknown> | null | undefined, key: st
     return null;
   }
   return numberFrom(source[key]);
+}
+
+function extractSensorReadings(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord);
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const readings = value.readings;
+  if (Array.isArray(readings)) {
+    return readings.filter(isRecord);
+  }
+  return [];
+}
+
+function toSensorDisplay(reading: Record<string, unknown>, index: number): SensorReadingDisplay {
+  const data = isRecord(reading.data) ? reading.data : {};
+  return {
+    key: `${String(reading.name || "sensor")}-${index}`,
+    name: String(reading.name || `Sensor ${index + 1}`),
+    type: String(reading.type || "sensor"),
+    ok: reading.ok !== false,
+    timestamp: typeof reading.timestamp === "string" ? reading.timestamp : null,
+    error: typeof reading.error === "string" ? reading.error : null,
+    metrics: Object.entries(data).slice(0, 8).map(([key, rawValue]) => ({
+      key,
+      label: humanizeKey(key),
+      value: formatSensorValue(rawValue),
+    })),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function humanizeKey(value: string): string {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatSensorValue(value: unknown): string {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (value === null || value === undefined) {
+    return "—";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function sortSeries(points: SeriesPoint[]): SeriesPoint[] {
@@ -889,6 +991,45 @@ function diagnosticSeverityClass(severity: string): string {
 
 .metric-item strong {
   font-size: 0.94rem;
+}
+
+.sensor-section {
+  margin-top: 1rem;
+}
+
+.sensor-section h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.sensor-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sensor-card {
+  border: 1px solid rgba(173, 193, 222, 0.22);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.sensor-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sensor-type {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.compact-metrics {
+  margin-top: 0.55rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .json-block {

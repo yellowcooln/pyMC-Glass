@@ -233,6 +233,9 @@ def inform(
     )
     force_certificate_renewal = False
     repeater = db.scalar(select(Repeater).where(Repeater.node_name == payload.node_name))
+    system_payload = payload.system.model_dump()
+    if payload.sensors is not None:
+        system_payload["sensors"] = payload.sensors
 
     if repeater is None:
         location = _normalize_location(payload.location) or _extract_location_from_settings(
@@ -252,7 +255,7 @@ def inform(
             inform_ip=request.client.host if request.client else None,
             last_inform_at=now,
             cert_expires_at=_normalize_datetime(payload.cert_expires_at),
-            system_json=_compact_json(payload.system.model_dump()),
+            system_json=_compact_json(system_payload),
             radio_json=_compact_json(payload.radio.model_dump()),
             counters_json=_compact_json(payload.counters.model_dump()),
             settings_json=_compact_json(payload.settings),
@@ -277,7 +280,7 @@ def inform(
         repeater.config_hash = payload.config_hash
         repeater.inform_ip = request.client.host if request.client else repeater.inform_ip
         repeater.last_inform_at = now
-        repeater.system_json = _compact_json(payload.system.model_dump())
+        repeater.system_json = _compact_json(system_payload)
         repeater.radio_json = _compact_json(payload.radio.model_dump())
         repeater.counters_json = _compact_json(payload.counters.model_dump())
         if payload.settings:
