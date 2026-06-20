@@ -225,11 +225,10 @@ msg_ok "Container packages installed"
 if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
   msg_info "Installing Tailscale into LXC using upstream helper script..."
   TAILSCALE_HELPER_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh"
-  TAILSCALE_HELPER_TMP=$(mktemp)
   TAILSCALE_WHIPTAIL_DIR=$(mktemp -d)
 
-  curl -fsSL "$TAILSCALE_HELPER_URL" -o "$TAILSCALE_HELPER_TMP"
-  chmod +x "$TAILSCALE_HELPER_TMP"
+  # Keep the installer command compatible with the project guidance.
+  # (Use the same upstream helper entrypoint, but force CT selection non-interactively.)
 
   cat >"$TAILSCALE_WHIPTAIL_DIR/whiptail" <<'WHIPTAIL'
 #!/usr/bin/env bash
@@ -238,9 +237,8 @@ WHIPTAIL
   chmod +x "$TAILSCALE_WHIPTAIL_DIR/whiptail"
 
   msg_info "Running Tailscale helper in non-interactive mode for CT ${CTID}..."
-  printf 'y\n' | TS_TAILSCALE_CTID="${CTID}" PATH="${TAILSCALE_WHIPTAIL_DIR}:$PATH" bash "$TAILSCALE_HELPER_TMP"
+  printf 'y\n' | TS_TAILSCALE_CTID="${CTID}" PATH="${TAILSCALE_WHIPTAIL_DIR}:$PATH" bash -c "$(curl -fsSL ${TAILSCALE_HELPER_URL})"
 
-  rm -f "$TAILSCALE_HELPER_TMP"
   rm -rf "$TAILSCALE_WHIPTAIL_DIR"
 
   msg_ok "Tailscale helper ran"
