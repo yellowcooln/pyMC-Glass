@@ -60,11 +60,35 @@ cleanup() {
 trap cleanup EXIT
 
 container_exec() {
+    # Ensure container is running before executing inside it.
+    local status
+    status=$(pct status "$CTID" 2>/dev/null || true)
+    if [[ "$status" != *"status: running" ]]; then
+        msg_info "Starting container ${CTID} before running command..."
+        pct start "$CTID" >/dev/null
+
+        local attempt
+        for attempt in $(seq 1 30); do
+            status=$(pct status "$CTID" 2>/dev/null || true)
+            if [[ "$status" == *"status: running" ]]; then
+                break
+            fi
+            sleep 1
+        done
+
+        status=$(pct status "$CTID" 2>/dev/null || true)
+        if [[ "$status" != *"status: running" ]]; then
+            msg_error "Container ${CTID} failed to start (status: ${status:-unknown})."
+            pct stop "$CTID" 2>/dev/null || true
+            exit 1
+        fi
+    fi
+
     pct exec "$CTID" -- "$@"
 }
 
 container_bash() {
-    pct exec "$CTID" -- bash -c "$1"
+    container_exec bash -c "$1"
 }
 
 # ── Preflight checks ───────────────────────────────────────────────────────
