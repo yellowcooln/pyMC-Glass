@@ -1,0 +1,331 @@
+#!/usr/bin/env bash
+# pyMC Glass - Proxmox LXC Installer
+# Creates an LXC container and installs pyMC Glass with Docker Compose.
+#
+# Usage (run on the Proxmox host):
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox-install.sh)"
+#
+# License: MIT
+# Source: https://github.com/pyMC-dev/pyMC-Glass
+
+set -euo pipefail
+
+# ── Defaults ───────────────────────────────────────────────────────────────
+REPO="https://github.com/pyMC-dev/pyMC-Glass.git"
+BRANCH="main"
+CT_TEMPLATE="debian-12-standard"
+CT_RAM=4096
+CT_SWAP=1024
+CT_DISK=16
+CT_CORES=2
+CT_HOSTNAME="pymc-glass"
+CT_BRIDGE="vmbr0"
+CT_STORAGE="local-lvm"
+CT_TEMPLATE_STORAGE="local"
+APP_DIR="/opt/pymc-glass"
+APP_ADMIN_EMAIL="admin@pymc.glass"
+APP_ADMIN_PASSWORD="admin12345678"
+APP_FRONTEND_PORT=5173
+APP_BACKEND_PORT=8080
+
+# ── Colors ─────────────────────────────────────────────────────────────────
+RD="\033[01;31m" GN="\033[1;92m" YW="\033[33m" BL="\033[36m" BLD="\033[1m" CL="\033[m"
+
+msg_info()  { echo -e " ${BL}ℹ${CL}  ${1}"; }
+msg_ok()    { echo -e " ${GN}✓${CL}  ${1}"; }
+msg_warn()  { echo -e " ${YW}⚠${CL}  ${1}"; }
+msg_error() { echo -e " ${RD}✗${CL}  ${1}"; }
+
+header() {
+    clear
+    echo -e "${BLD}"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "           pyMC Glass - Proxmox LXC Installer"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo -e "${CL}"
+}
+
+cleanup() {
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ] && [ -n "${CTID:-}" ] && pct status "$CTID" &>/dev/null; then
+        echo ""
+        read -p "  Delete the failed container ${CTID}? [y/N]: " -r
+        if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+            pct stop "$CTID" 2>/dev/null || true
+            pct destroy "$CTID" 2>/dev/null || true
+            msg_ok "Container ${CTID} removed"
+        fi
+    fi
+}
+trap cleanup EXIT
+
+require_number() {
+    local name="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+        msg_error "${name} must be a number"
+        exit 1
+    fi
+}
+
+container_exec() {
+    pct exec "$CTID" -- "$@"
+}
+
+container_bash() {
+    pct exec "$CTID" -- bash -c "$1"
+}
+
+# ── Preflight checks ───────────────────────────────────────────────────────
+header
+
+if ! command -v pct &>/dev/null; then
+    msg_error "This script must be run on a Proxmox VE host."
+    exit 1
+fi
+
+if ! command -v pvesh &>/dev/null; then
+    msg_error "pvesh was not found. This script must run from the Proxmox VE shell."
+    exit 1
+fi
+
+if [ "$EUID" -ne 0 ]; then
+    msg_error "Please run as root."
+    exit 1
+fi
+
+msg_ok "Running on Proxmox host as root"
+
+DEFAULT_CTID=$(pvesh get /cluster/nextid)
+
+# ── Interactive settings ───────────────────────────────────────────────────
+echo ""
+echo -e "${BLD}Container Settings${CL} (press Enter for defaults):"
+echo ""
+
+while true; do
+    read -p "  Container ID [${DEFAULT_CTID}]: " -r input
+    CTID="${input:-$DEFAULT_CTID}"
+    if [[ ! "$CTID" =~ ^[0-9]+$ ]]; then
+        msg_warn "Container ID must be a number"
+        continue
+    fi
+    if pct status "$CTID" &>/dev/null; then
+        msg_warn "Container ID ${CTID} already exists"
+        continue
+    fi
+    break
+done
+
+read -p "  Hostname [${CT_HOSTNAME}]: " -r input; CT_HOSTNAME="${input:-$CT_HOSTNAME}"
+read -p "  RAM in MB [${CT_RAM}]: " -r input; CT_RAM="${input:-$CT_RAM}"
+read -p "  Disk in GB [${CT_DISK}]: " -r input; CT_DISK="${input:-$CT_DISK}"
+read -p "  CPU cores [${CT_CORES}]: " -r input; CT_CORES="${input:-$CT_CORES}"
+read -p "  Bridge [${CT_BRIDGE}]: " -r input; CT_BRIDGE="${input:-$CT_BRIDGE}"
+
+AVAILABLE_STORAGES=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}' || echo "local-lvm")
+echo "  Available storages: ${AVAILABLE_STORAGES}"
+read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE}"
+read -p "  Template storage [${CT_TEMPLATE_STORAGE}]: " -r input; CT_TEMPLATE_STORAGE="${input:-$CT_TEMPLATE_STORAGE}"
+read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
+read -p "  App admin email [${APP_ADMIN_EMAIL}]: " -r input; APP_ADMIN_EMAIL="${input:-$APP_ADMIN_EMAIL}"
+read -sp "  App admin password [${APP_ADMIN_PASSWORD}]: " input; echo; APP_ADMIN_PASSWORD="${input:-$APP_ADMIN_PASSWORD}"
+read -sp "  Container root password [pymc-glass]: " CT_PASSWORD; echo
+CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
+
+require_number "RAM" "$CT_RAM"
+require_number "Disk" "$CT_DISK"
+require_number "CPU cores" "$CT_CORES"
+
+# ── Confirmation ───────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLD}Summary:${CL}"
+echo "  CTID: ${CTID}  Host: ${CT_HOSTNAME}  RAM: ${CT_RAM}MB  Disk: ${CT_DISK}GB"
+echo "  Cores: ${CT_CORES}  Storage: ${CT_STORAGE}  Bridge: ${CT_BRIDGE}  Branch: ${BRANCH}"
+echo "  App directory: ${APP_DIR}"
+echo "  App admin: ${APP_ADMIN_EMAIL}"
+echo "  Mode: privileged LXC with nesting enabled for Docker Compose"
+echo ""
+read -p "  Proceed? [Y/n]: " -r
+[[ "${REPLY:-Y}" =~ ^[Nn]$ ]] && { msg_warn "Aborted"; exit 0; }
+
+# ── Download template ──────────────────────────────────────────────────────
+echo ""
+msg_info "Downloading Debian 12 template..."
+TEMPLATE_FILE=$(pveam available -section system 2>/dev/null | grep "${CT_TEMPLATE}" | sort -t- -k4 -V | tail -1 | awk '{print $2}')
+[ -z "$TEMPLATE_FILE" ] && { msg_error "Template not found. Run: pveam update"; exit 1; }
+
+pveam list "$CT_TEMPLATE_STORAGE" 2>/dev/null | grep -q "$TEMPLATE_FILE" || \
+    pveam download "$CT_TEMPLATE_STORAGE" "$TEMPLATE_FILE"
+msg_ok "Template ready"
+
+# ── Create container ───────────────────────────────────────────────────────
+msg_info "Creating LXC container ${CTID}..."
+pct create "$CTID" "${CT_TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_FILE}" \
+    --hostname "$CT_HOSTNAME" \
+    --memory "$CT_RAM" \
+    --swap "$CT_SWAP" \
+    --cores "$CT_CORES" \
+    --rootfs "${CT_STORAGE}:${CT_DISK}" \
+    --net0 "name=eth0,bridge=${CT_BRIDGE},ip=dhcp" \
+    --unprivileged 0 \
+    --features nesting=1 \
+    --onboot 1 \
+    --start 0 \
+    --password "$CT_PASSWORD" \
+    --ostype debian
+msg_ok "Container created"
+
+# Docker-in-LXC compatibility knobs. Keep this scoped to the new CT only.
+msg_info "Configuring LXC nesting for Docker..."
+cat >> "/etc/pve/lxc/${CTID}.conf" <<'EOF'
+
+# Docker support for pyMC Glass
+lxc.apparmor.profile: unconfined
+lxc.cgroup2.devices.allow: a
+lxc.cap.drop:
+EOF
+msg_ok "LXC Docker compatibility configured"
+
+# ── Start container & wait for network ─────────────────────────────────────
+msg_info "Starting container..."
+pct start "$CTID"
+sleep 3
+
+msg_info "Waiting for container network..."
+for _ in $(seq 1 45); do
+    if container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
+if ! container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
+    msg_warn "Container did not reach 8.8.8.8 yet; continuing anyway in case DNS/routing is restricted."
+else
+    msg_ok "Container running with network"
+fi
+
+# ── Bootstrap container ────────────────────────────────────────────────────
+msg_info "Installing Docker, Compose, git, and supporting packages inside container..."
+container_bash "
+    set -euo pipefail
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update -qq
+    apt-get install -y locales ca-certificates curl git make openssl whiptail >/dev/null 2>&1
+    sed -i 's/# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+    locale-gen >/dev/null 2>&1
+    echo 'LANG=en_US.UTF-8' > /etc/default/locale
+
+    if ! command -v docker >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com | sh >/dev/null
+    fi
+    systemctl enable --now docker >/dev/null 2>&1
+
+    # Enable auto-login on console (no password prompt in Proxmox web console).
+    mkdir -p /etc/systemd/system/container-getty@1.service.d
+    cat > /etc/systemd/system/container-getty@1.service.d/override.conf <<'AUTOLOGIN'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \$TERM
+AUTOLOGIN
+    systemctl daemon-reload
+"
+msg_ok "Container packages installed"
+
+msg_info "Cloning pyMC Glass (branch: ${BRANCH})..."
+container_bash "
+    set -euo pipefail
+    rm -rf '${APP_DIR}'
+    git clone --branch '${BRANCH}' '${REPO}' '${APP_DIR}'
+"
+msg_ok "Repository cloned"
+
+msg_info "Configuring pyMC Glass environment..."
+POSTGRES_PASSWORD=$(openssl rand -base64 30 | tr -d '=+/[:space:]' | cut -c1-32)
+container_bash "
+    set -euo pipefail
+    cd '${APP_DIR}'
+    make init-prod-env
+    printf 'POSTGRES_PASSWORD=%s\n' '${POSTGRES_PASSWORD}' > .env.production
+    sed -i 's/^BOOTSTRAP_SEED_ADMIN_EMAIL=.*/BOOTSTRAP_SEED_ADMIN_EMAIL=${APP_ADMIN_EMAIL}/' backend/.env.production
+    sed -i 's/^BOOTSTRAP_SEED_ADMIN_PASSWORD=.*/BOOTSTRAP_SEED_ADMIN_PASSWORD=${APP_ADMIN_PASSWORD}/' backend/.env.production
+    sed -i 's/^BOOTSTRAP_SEED_ADMIN_ENABLED=.*/BOOTSTRAP_SEED_ADMIN_ENABLED=true/' backend/.env.production
+    sed -i 's/^APP_ENV=.*/APP_ENV=production/' backend/.env.production
+"
+msg_ok "Environment configured"
+
+msg_info "Installing login banner inside container..."
+container_bash "cat > /etc/profile.d/pymc-glass-motd.sh <<'MOTD'
+#!/bin/sh
+HOSTNAME=\$(hostname)
+IP=\$(hostname -I | awk '{print \$1}')
+OS=\$(. /etc/os-release && echo \"\$NAME\")
+VER=\$(. /etc/os-release && echo \"\$VERSION_ID\")
+echo \"\"
+echo \"    pyMC Glass LXC Container\"
+echo \"    🌐  GitHub: https://github.com/pyMC-dev/pyMC-Glass\"
+echo \"\"
+echo \"    🖥️   OS: \$OS - Version: \$VER\"
+echo \"    🏠  Hostname: \$HOSTNAME\"
+echo \"    💡  IP Address: \$IP\"
+echo \"    🪟  Glass UI: http://\$IP:5173\"
+echo \"    🩺  Backend health: http://\$IP:8080/healthz\"
+echo \"\"
+echo \"    Default login: ${APP_ADMIN_EMAIL} / ${APP_ADMIN_PASSWORD}\"
+echo \"    Management: cd ${APP_DIR} && docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml ps\"
+echo \"\"
+MOTD
+chmod +x /etc/profile.d/pymc-glass-motd.sh"
+msg_ok "Login banner installed"
+
+# ── Start pyMC Glass ───────────────────────────────────────────────────────
+msg_info "Starting pyMC Glass production stack (this can take several minutes)..."
+container_bash "
+    set -euo pipefail
+    cd '${APP_DIR}'
+    docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+"
+msg_ok "Docker Compose stack started"
+
+msg_info "Waiting for backend health endpoint..."
+for _ in $(seq 1 90); do
+    if container_exec curl -fsS "http://127.0.0.1:${APP_BACKEND_PORT}/healthz" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 5
+done
+
+if container_exec curl -fsS "http://127.0.0.1:${APP_BACKEND_PORT}/healthz" >/dev/null 2>&1; then
+    msg_ok "Backend is healthy"
+else
+    msg_warn "Backend health endpoint is not ready yet. Check logs with:"
+    echo "    pct exec ${CTID} -- bash -lc 'cd ${APP_DIR} && docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml logs --tail=200'"
+fi
+
+# ── Get container IP ───────────────────────────────────────────────────────
+sleep 2
+CT_IP=$(container_exec hostname -I 2>/dev/null | awk '{print $1}')
+
+# ── Done ───────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLD}"
+echo "═══════════════════════════════════════════════════════════════"
+echo "          ✓ pyMC Glass Installation Complete!"
+echo "═══════════════════════════════════════════════════════════════"
+echo -e "${CL}"
+echo -e "  Container:       ${GN}${CTID}${CL} (${CT_HOSTNAME})"
+echo -e "  IP Address:      ${GN}${CT_IP:-unknown}${CL}"
+echo -e "  Glass UI:        ${GN}http://${CT_IP:-<ip>}:${APP_FRONTEND_PORT}${CL}"
+echo -e "  Backend health:  ${GN}http://${CT_IP:-<ip>}:${APP_BACKEND_PORT}/healthz${CL}"
+echo ""
+echo -e "  Default app username:  ${GN}${APP_ADMIN_EMAIL}${CL}"
+echo -e "  Default app password:  ${GN}${APP_ADMIN_PASSWORD}${CL}"
+echo -e "  Container root login:  ${GN}root${CL} / ${GN}${CT_PASSWORD}${CL}"
+echo ""
+echo "  Next: open the Glass UI and change the default admin password after login."
+echo "  Manage: pct enter ${CTID}, then: cd ${APP_DIR}"
+echo "  Logs:   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml logs -f"
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
