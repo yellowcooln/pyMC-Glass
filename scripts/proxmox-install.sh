@@ -14,9 +14,9 @@ set -euo pipefail
 REPO="https://github.com/pyMC-dev/pyMC-Glass.git"
 BRANCH="main"
 CT_TEMPLATE="debian-12-standard"
-CT_RAM=4096
+CT_RAM=2048
 CT_SWAP=1024
-CT_DISK=16
+CT_DISK=10
 CT_CORES=2
 CT_HOSTNAME="pymc-glass"
 CT_BRIDGE="vmbr0"
