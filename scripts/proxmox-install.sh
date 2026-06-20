@@ -59,13 +59,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-require_number() {
-    local name="$1"
-    local value="$2"
-    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-        msg_error "${name} must be a number"
-        exit 1
-    fi
+prompt_number() {
+    local var_name="$1"
+    local label="$2"
+    local default="$3"
+    local value=""
+    while true; do
+        read -p "  ${label} [${default}]: " -r value
+        value="${value:-$default}"
+        if [[ "$value" =~ ^[0-9]+$ ]]; then
+            printf -v "$var_name" '%s' "$value"
+            return 0
+        fi
+        msg_warn "${label} must be a number"
+    done
 }
 
 container_exec() {
@@ -118,13 +125,14 @@ while true; do
 done
 
 read -p "  Hostname [${CT_HOSTNAME}]: " -r input; CT_HOSTNAME="${input:-$CT_HOSTNAME}"
-read -p "  RAM in MB [${CT_RAM}]: " -r input; CT_RAM="${input:-$CT_RAM}"
-read -p "  Disk in GB [${CT_DISK}]: " -r input; CT_DISK="${input:-$CT_DISK}"
-read -p "  CPU cores [${CT_CORES}]: " -r input; CT_CORES="${input:-$CT_CORES}"
+prompt_number CT_RAM "RAM in MB" "$CT_RAM"
+prompt_number CT_DISK "Disk in GB" "$CT_DISK"
+prompt_number CT_CORES "CPU cores" "$CT_CORES"
 read -p "  Bridge [${CT_BRIDGE}]: " -r input; CT_BRIDGE="${input:-$CT_BRIDGE}"
 
-AVAILABLE_STORAGES=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}' || echo "local-lvm")
-echo "  Available storages: ${AVAILABLE_STORAGES}"
+AVAILABLE_STORAGES=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print "    - " $1}' || printf '    - local-lvm\n')
+echo "  Available storages:"
+printf '%s\n' "${AVAILABLE_STORAGES}"
 read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE}"
 read -p "  Template storage [${CT_TEMPLATE_STORAGE}]: " -r input; CT_TEMPLATE_STORAGE="${input:-$CT_TEMPLATE_STORAGE}"
 read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
@@ -132,10 +140,6 @@ read -p "  App admin email [${APP_ADMIN_EMAIL}]: " -r input; APP_ADMIN_EMAIL="${
 read -sp "  App admin password [${APP_ADMIN_PASSWORD}]: " input; echo; APP_ADMIN_PASSWORD="${input:-$APP_ADMIN_PASSWORD}"
 read -sp "  Container root password [pymc-glass]: " CT_PASSWORD; echo
 CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
-
-require_number "RAM" "$CT_RAM"
-require_number "Disk" "$CT_DISK"
-require_number "CPU cores" "$CT_CORES"
 
 # ── Confirmation ───────────────────────────────────────────────────────────
 echo ""
