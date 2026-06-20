@@ -415,9 +415,9 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
   --sidebar-expanded-width: 260px;
   --submenu-line-color: rgba(86, 109, 142, 0.34);
   --submenu-line-color-soft: rgba(86, 109, 142, 0.2);
-  --sidebar-icon-color: #334155;
-  --sidebar-icon-bg: rgba(15, 23, 42, 0.04);
-  --sidebar-icon-border: rgba(83, 109, 143, 0.22);
+  --sidebar-icon-color: #0f172a;
+  --sidebar-icon-bg: rgba(15, 23, 42, 0.08);
+  --sidebar-icon-border: rgba(83, 109, 143, 0.36);
   --sidebar-label-color: #1f2a3d;
   --sidebar-chevron-color: #52657f;
   --sidebar-tooltip-bg: rgba(255, 255, 255, 0.98);
@@ -435,6 +435,7 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
   --sidebar-submenu-hover-bg: rgba(13, 115, 119, 0.07);
   --sidebar-submenu-active-color: #0f373a;
   --sidebar-submenu-active-bg: rgba(13, 115, 119, 0.12);
+  --sidebar-open-icon-opacity: 1;
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -468,6 +469,7 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
   --sidebar-submenu-hover-bg: rgba(32, 46, 70, 0.34);
   --sidebar-submenu-active-color: #e2f8f5;
   --sidebar-submenu-active-bg: rgba(40, 97, 99, 0.28);
+  --sidebar-open-icon-opacity: 0.62;
 }
 
 .sidebar-shell.expanded {
@@ -690,7 +692,7 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
 }
 
 .parent-item.is-open .icon-box {
-  opacity: 0.62;
+  opacity: var(--sidebar-open-icon-opacity);
   transform: scale(0.92);
 }
 
