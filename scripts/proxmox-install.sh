@@ -243,6 +243,7 @@ container_bash "
     sed -i 's/^BOOTSTRAP_SEED_ADMIN_PASSWORD=.*/BOOTSTRAP_SEED_ADMIN_PASSWORD=${APP_ADMIN_PASSWORD}/' backend/.env.production
     sed -i 's/^BOOTSTRAP_SEED_ADMIN_ENABLED=.*/BOOTSTRAP_SEED_ADMIN_ENABLED=true/' backend/.env.production
     sed -i 's/^APP_ENV=.*/APP_ENV=production/' backend/.env.production
+    cp backend/.env.production backend/.env
 "
 msg_ok "Environment configured"
 
