@@ -87,6 +87,14 @@ fi
 
 msg_ok "Running on Proxmox host as root"
 
+if [ ! -t 0 ]; then
+    msg_error "Do not run this installer with: curl ... | bash"
+    echo ""
+    echo "  Interactive prompts need terminal stdin. Use:"
+    echo "  bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox-install.sh)\""
+    exit 1
+fi
+
 DEFAULT_CTID=$(pvesh get /cluster/nextid)
 
 # ── Interactive settings ───────────────────────────────────────────────────
