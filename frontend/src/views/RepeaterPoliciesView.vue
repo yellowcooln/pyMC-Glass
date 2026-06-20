@@ -127,80 +127,107 @@
         <section class="policy-builder-section">
           <div class="policy-section-header">
             <div>
-              <h3 class="policy-section-title">Rules</h3>
-              <p class="section-subtitle">First matching enabled rule wins, matching the repeater Policy Engine.</p>
+              <h3 class="policy-section-title">Add Policy Rule</h3>
+              <p class="section-subtitle">Choose match logic, then add one or more conditions. ALL conditions must match.</p>
             </div>
-            <button class="btn btn-secondary" type="button" @click="addRule">Add rule</button>
+            <button class="btn btn-secondary" type="button" @click="addRule">Add Policy Rule</button>
           </div>
 
           <div v-if="builder.rules.length === 0" class="empty-state">No rules. Default action will apply.</div>
-          <article v-for="(rule, ruleIndex) in builder.rules" :key="rule.localId" class="rule-card">
-            <div class="rule-header">
-              <div class="rule-title-wrap">
-                <span class="rule-number">{{ ruleIndex + 1 }}</span>
-                <label class="field-label grow">
-                  Rule name
-                  <input v-model.trim="rule.name" class="field" @input="syncJsonFromBuilder" />
-                </label>
-              </div>
-              <div class="rule-actions">
-                <label class="toggle-row compact">
-                  <input v-model="rule.enabled" type="checkbox" @change="syncJsonFromBuilder" />
-                  <span>Enabled</span>
-                </label>
-                <button class="btn btn-danger" type="button" @click="removeRule(ruleIndex)">Remove</button>
-              </div>
-            </div>
-
-            <div class="grid-2">
+          <article v-for="(rule, ruleIndex) in builder.rules" :key="rule.localId" class="rule-card repeater-style-rule">
+            <div class="repeater-rule-grid">
               <label class="field-label">
-                Match logic
+                Rule Name
+                <input v-model.trim="rule.name" class="field" @input="syncJsonFromBuilder" />
+              </label>
+              <label class="field-label">
+                Match Logic
                 <select v-model="rule.logic" class="field" @change="syncJsonFromBuilder">
-                  <option value="all">all conditions</option>
-                  <option value="any">any condition</option>
+                  <option value="all">ALL</option>
+                  <option value="any">ANY</option>
                 </select>
               </label>
               <label class="field-label">
-                Then action
+                Action
                 <select v-model="rule.action" class="field" @change="syncJsonFromBuilder">
                   <option value="allow">allow</option>
                   <option value="drop">drop</option>
                   <option value="log_only">log_only</option>
                 </select>
               </label>
+              <label class="toggle-row builder-toggle">
+                <input v-model="rule.enabled" type="checkbox" @change="syncJsonFromBuilder" />
+                <span>Rule enabled</span>
+              </label>
             </div>
 
-            <div class="condition-list">
+            <div class="condition-list repeater-conditions">
               <div class="policy-section-header compact-header">
                 <h4 class="condition-title">Conditions</h4>
-                <button class="btn btn-secondary" type="button" @click="addCondition(ruleIndex)">Add condition</button>
+                <div class="rule-actions">
+                  <button class="btn btn-secondary" type="button" @click="addCondition(ruleIndex)">Add condition</button>
+                  <button class="btn btn-danger" type="button" @click="removeRule(ruleIndex)">Remove rule</button>
+                </div>
               </div>
               <div v-if="rule.conditions.length === 0" class="empty-state small">Add at least one condition for this rule to match.</div>
-              <div v-for="(condition, conditionIndex) in rule.conditions" :key="condition.localId" class="condition-row">
-                <label class="field-label">
-                  Field
-                  <select v-model="condition.field" class="field" @change="syncJsonFromBuilder">
-                    <option v-for="field in fieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
-                  </select>
-                </label>
-                <label class="field-label">
-                  Operator
-                  <select v-model="condition.op" class="field" @change="syncJsonFromBuilder">
-                    <option v-for="op in operatorOptions" :key="op.value" :value="op.value">{{ op.label }}</option>
-                  </select>
-                </label>
-                <label class="field-label">
-                  Value
-                  <input
-                    v-model="condition.value"
-                    class="field"
-                    placeholder="literal, JSON array, number, or @group.name"
-                    @input="syncJsonFromBuilder"
-                  />
-                </label>
-                <button class="btn btn-danger condition-remove" type="button" @click="removeCondition(ruleIndex, conditionIndex)">
-                  Remove
-                </button>
+              <div v-else class="conditions-table-wrap">
+                <table class="data-table conditions-table">
+                  <thead>
+                    <tr>
+                      <th>Drag</th>
+                      <th>Field</th>
+                      <th>Operator</th>
+                      <th>Source</th>
+                      <th>Value</th>
+                      <th>Type</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(condition, conditionIndex) in rule.conditions" :key="condition.localId">
+                      <td class="drag-cell">
+                        <button class="mini-btn" type="button" :disabled="conditionIndex === 0" @click="moveCondition(ruleIndex, conditionIndex, -1)">↑</button>
+                        <button class="mini-btn" type="button" :disabled="conditionIndex === rule.conditions.length - 1" @click="moveCondition(ruleIndex, conditionIndex, 1)">↓</button>
+                      </td>
+                      <td>
+                        <select v-model="condition.field" class="field table-field" @change="syncJsonFromBuilder">
+                          <option v-for="field in fieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select v-model="condition.op" class="field table-field" @change="syncJsonFromBuilder">
+                          <option v-for="op in operatorOptions" :key="op.value" :value="op.value">{{ op.label }}</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select v-model="condition.valueSource" class="field table-field" @change="syncJsonFromBuilder">
+                          <option value="literal">Literal</option>
+                          <option value="group">Group</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          v-model="condition.value"
+                          class="field table-field value-field"
+                          :placeholder="condition.valueSource === 'group' ? '@channel_hash_groups.blocked' : 'value'"
+                          @input="syncJsonFromBuilder"
+                        />
+                      </td>
+                      <td>
+                        <select v-model="condition.valueType" class="field table-field" @change="syncJsonFromBuilder">
+                          <option value="string">String</option>
+                          <option value="number">Number</option>
+                          <option value="boolean">Boolean</option>
+                        </select>
+                      </td>
+                      <td>
+                        <button class="btn btn-danger condition-remove" type="button" @click="removeCondition(ruleIndex, conditionIndex)">
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </article>
@@ -317,12 +344,18 @@ import type {
 type Action = "allow" | "drop" | "log_only";
 type Logic = "all" | "any";
 type EditorMode = "builder" | "json";
+type RuleValueType = "string" | "number" | "boolean";
+type ValueSource = "literal" | "group";
 
 type BuilderCondition = {
   localId: string;
   field: string;
   op: string;
   value: string;
+  valueType: RuleValueType;
+  valueSource: ValueSource;
+  groupKind?: "channel_hashes" | "pubkeys";
+  groupId?: string;
 };
 
 type BuilderRule = {
@@ -346,30 +379,36 @@ const DEFAULT_POLICY = {
 };
 
 const fieldOptions = [
-  { value: "payload_type", label: "Payload type" },
-  { value: "route_type", label: "Route type" },
-  { value: "hop_count", label: "Hop count" },
-  { value: "path_hashes", label: "Path hashes" },
-  { value: "channel_hash", label: "Channel hash" },
-  { value: "channel_decryptable", label: "Channel decryptable" },
-  { value: "channel_message_body", label: "Channel message body" },
-  { value: "channel_sender", label: "Channel sender" },
-  { value: "payload_hex", label: "Payload hex" },
+  { value: "route_type", label: "Route Type" },
+  { value: "payload_type", label: "Payload Type" },
+  { value: "payload_length", label: "Payload Length" },
+  { value: "path_hash_size", label: "Path Hash Size" },
+  { value: "hop_count", label: "Hop Count" },
   { value: "rssi", label: "RSSI" },
   { value: "snr", label: "SNR" },
+  { value: "mode", label: "Mode" },
+  { value: "local_transmission", label: "Local Transmission" },
+  { value: "path_hashes", label: "Path Hashes" },
+  { value: "channel_hash", label: "Channel Hash" },
+  { value: "channel_decryptable", label: "Channel Decryptable" },
+  { value: "channel_message_body", label: "Channel Message Body" },
+  { value: "payload_hex", label: "Payload Hex" },
+  { value: "transport_code_0", label: "Transport Code 0" },
+  { value: "transport_code_1", label: "Transport Code 1" },
 ];
 
 const operatorOptions = [
-  { value: "equals", label: "equals" },
-  { value: "not_equals", label: "not equals" },
-  { value: "in", label: "in list/group" },
-  { value: "not_in", label: "not in list/group" },
-  { value: "contains", label: "contains" },
-  { value: "intersects", label: "intersects" },
-  { value: "gt", label: ">" },
-  { value: "gte", label: ">=" },
-  { value: "lt", label: "<" },
-  { value: "lte", label: "<=" },
+  { value: "equals", label: "Equals" },
+  { value: "not_equals", label: "Not Equals" },
+  { value: "greater_than", label: "Greater Than" },
+  { value: "greater_or_equal", label: "Greater or Equal" },
+  { value: "less_than", label: "Less Than" },
+  { value: "less_or_equal", label: "Less or Equal" },
+  { value: "contains", label: "Contains" },
+  { value: "in", label: "In List" },
+  { value: "intersects", label: "Intersects" },
+  { value: "starts_with", label: "Starts With" },
+  { value: "ends_with", label: "Ends With" },
 ];
 
 const loading = ref(false);
@@ -597,12 +636,24 @@ function removeCondition(ruleIndex: number, conditionIndex: number): void {
   syncJsonFromBuilder();
 }
 
+function moveCondition(ruleIndex: number, conditionIndex: number, delta: number): void {
+  const conditions = builder.rules[ruleIndex]?.conditions;
+  if (!conditions) return;
+  const nextIndex = conditionIndex + delta;
+  if (nextIndex < 0 || nextIndex >= conditions.length) return;
+  const [item] = conditions.splice(conditionIndex, 1);
+  conditions.splice(nextIndex, 0, item);
+  syncJsonFromBuilder();
+}
+
 function newCondition(): BuilderCondition {
   return {
     localId: crypto.randomUUID(),
-    field: "payload_type",
-    op: "equals",
-    value: "",
+    field: "hop_count",
+    op: "greater_than",
+    value: "2",
+    valueType: "number",
+    valueSource: "literal",
   };
 }
 
@@ -656,7 +707,7 @@ function policyFromBuilder(options: { quiet?: boolean } = {}): Record<string, un
         [rule.logic]: rule.conditions.map((condition) => ({
           field: condition.field,
           op: condition.op,
-          value: parseConditionValue(condition.value),
+          value: conditionValueForPolicy(condition),
         })),
       },
       then: { action: rule.action },
@@ -694,29 +745,40 @@ function toBuilderRule(value: unknown, index: number): BuilderRule {
 
 function toBuilderCondition(value: unknown): BuilderCondition {
   const condition = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const rawValue = condition.value;
+  const groupRef = typeof rawValue === "string" && rawValue.startsWith("@");
   return {
     localId: crypto.randomUUID(),
-    field: String(condition.field ?? "payload_type"),
+    field: String(condition.field ?? "hop_count"),
     op: String(condition.op ?? condition.operator ?? "equals"),
-    value: stringifyConditionValue(condition.value),
+    value: stringifyConditionValue(rawValue),
+    valueType: inferValueType(rawValue),
+    valueSource: groupRef ? "group" : "literal",
   };
 }
 
-function parseConditionValue(value: string): unknown {
+function conditionValueForPolicy(condition: BuilderCondition): unknown {
+  if (condition.valueSource === "group") {
+    return condition.value.trim().startsWith("@") ? condition.value.trim() : `@${condition.value.trim()}`;
+  }
+  return parseConditionValue(condition.value, condition.valueType);
+}
+
+function parseConditionValue(value: string, valueType: RuleValueType): unknown {
   const trimmed = value.trim();
   if (!trimmed) return "";
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  if (trimmed === "null") return null;
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
-  if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return trimmed;
-    }
+  if (valueType === "boolean") return trimmed === "true";
+  if (valueType === "number") {
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
   return trimmed;
+}
+
+function inferValueType(value: unknown): RuleValueType {
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "number") return "number";
+  return "string";
 }
 
 function stringifyConditionValue(value: unknown): string {
