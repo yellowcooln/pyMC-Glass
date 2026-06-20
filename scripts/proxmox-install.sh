@@ -194,52 +194,6 @@ if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
   msg_ok "Tailscale support preconfiguration applied"
 fi
 
-# ── Start container & wait for network ─────────────────────────────────────
-msg_info "Starting container..."
-pct start "$CTID"
-sleep 3
-
-msg_info "Waiting for container network..."
-for _ in $(seq 1 45); do
-    if container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
-        break
-    fi
-    sleep 2
-done
-
-if ! container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
-    msg_warn "Container did not reach 8.8.8.8 yet; continuing anyway in case DNS/routing is restricted."
-else
-    msg_ok "Container running with network"
-fi
-
-if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
-  msg_info "Installing Tailscale into LXC using upstream helper script..."
-  TAILSCALE_HELPER_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh"
-  TAILSCALE_HELPER_TMP=$(mktemp)
-  TAILSCALE_WHIPTAIL_DIR=$(mktemp -d)
-
-  curl -fsSL "$TAILSCALE_HELPER_URL" -o "$TAILSCALE_HELPER_TMP"
-  chmod +x "$TAILSCALE_HELPER_TMP"
-
-  cat >"$TAILSCALE_WHIPTAIL_DIR/whiptail" <<'WHIPTAIL'
-#!/usr/bin/env bash
-echo "${TS_TAILSCALE_CTID}"
-WHIPTAIL
-  chmod +x "$TAILSCALE_WHIPTAIL_DIR/whiptail"
-
-  msg_info "Running Tailscale helper in non-interactive mode for CT ${CTID}..."
-  TS_TAILSCALE_CTID="$CTID"     PATH="$TAILSCALE_WHIPTAIL_DIR:$PATH"     bash -c 'printf "y\n" | bash "$TAILSCALE_HELPER_TMP"'
-
-  rm -f "$TAILSCALE_HELPER_TMP"
-  rm -rf "$TAILSCALE_WHIPTAIL_DIR"
-
-  msg_ok "Tailscale helper ran"
-  msg_info "Next steps for Tailscale:"
-  echo "  - Reboot the container and run:"
-  echo "    pct exec ${CTID} -- tailscale up"
-fi
-
 # ── Bootstrap container ────────────────────────────────────────────────────
 msg_info "Installing Docker, Compose, git, and supporting packages inside container..."
 container_bash "
@@ -267,6 +221,33 @@ AUTOLOGIN
     systemctl daemon-reload
 "
 msg_ok "Container packages installed"
+
+if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
+  msg_info "Installing Tailscale into LXC using upstream helper script..."
+  TAILSCALE_HELPER_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh"
+  TAILSCALE_HELPER_TMP=$(mktemp)
+  TAILSCALE_WHIPTAIL_DIR=$(mktemp -d)
+
+  curl -fsSL "$TAILSCALE_HELPER_URL" -o "$TAILSCALE_HELPER_TMP"
+  chmod +x "$TAILSCALE_HELPER_TMP"
+
+  cat >"$TAILSCALE_WHIPTAIL_DIR/whiptail" <<'WHIPTAIL'
+#!/usr/bin/env bash
+echo "${TS_TAILSCALE_CTID}"
+WHIPTAIL
+  chmod +x "$TAILSCALE_WHIPTAIL_DIR/whiptail"
+
+  msg_info "Running Tailscale helper in non-interactive mode for CT ${CTID}..."
+  printf 'y\n' | TS_TAILSCALE_CTID="${CTID}" PATH="${TAILSCALE_WHIPTAIL_DIR}:$PATH" bash "$TAILSCALE_HELPER_TMP"
+
+  rm -f "$TAILSCALE_HELPER_TMP"
+  rm -rf "$TAILSCALE_WHIPTAIL_DIR"
+
+  msg_ok "Tailscale helper ran"
+  msg_info "Next steps for Tailscale:"
+  echo "  - Reboot the container and run:"
+  echo "    pct exec ${CTID} -- tailscale up"
+fi
 
 msg_info "Cloning pyMC Glass (branch: ${BRANCH})..."
 container_bash "
@@ -324,7 +305,7 @@ container_bash "
 
 set -euo pipefail
 
-APP_DIR='${APP_DIR}'
+APP_DIR='/opt/pymc-glass'
 COMPOSE_ARGS='--env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml'
 
 if [ ! -d "$APP_DIR" ]; then
@@ -339,7 +320,9 @@ if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 CURRENT_BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
-read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " CHOSEN_BRANCH
+if ! read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " CHOSEN_BRANCH; then
+    CHOSEN_BRANCH="${CURRENT_BRANCH}"
+fi
 CHOSEN_BRANCH="${CHOSEN_BRANCH:-$CURRENT_BRANCH}"
 
 git -C "$APP_DIR" fetch --all --prune
