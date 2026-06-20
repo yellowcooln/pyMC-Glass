@@ -125,7 +125,6 @@ read -p "  Bridge [${CT_BRIDGE}]: " -r input; CT_BRIDGE="${input:-$CT_BRIDGE}"
 AVAILABLE_STORAGES=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}' || echo "local-lvm")
 echo "  Available storages: ${AVAILABLE_STORAGES}"
 read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE}"
-read -p "  Template storage [${CT_TEMPLATE_STORAGE}]: " -r input; CT_TEMPLATE_STORAGE="${input:-$CT_TEMPLATE_STORAGE}"
 read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
 read -sp "  Root password [pymc-glass]: " CT_PASSWORD; echo
 CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
@@ -135,9 +134,7 @@ echo ""
 echo -e "${BLD}Summary:${CL}"
 echo "  CTID: ${CTID}  Host: ${CT_HOSTNAME}  RAM: ${CT_RAM}MB  Disk: ${CT_DISK}GB"
 echo "  Cores: ${CT_CORES}  Storage: ${CT_STORAGE}  Bridge: ${CT_BRIDGE}  Branch: ${BRANCH}"
-echo "  App directory: ${APP_DIR}"
-echo "  App admin: ${APP_ADMIN_EMAIL}"
-echo "  Mode: privileged LXC with nesting enabled for Docker Compose"
+echo "  Mode: privileged (required for Docker Compose in LXC)"
 echo ""
 read -p "  Proceed? [Y/n]: " -r
 [[ "${REPLY:-Y}" =~ ^[Nn]$ ]] && { msg_warn "Aborted"; exit 0; }
