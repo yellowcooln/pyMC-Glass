@@ -325,7 +325,6 @@ container_bash "
 set -euo pipefail
 
 APP_DIR='/opt/pymc-glass'
-COMPOSE_ARGS='--env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml'
 
 if [ ! -d "$APP_DIR" ]; then
     echo "ERROR: pyMC Glass directory not found at $APP_DIR"
@@ -357,9 +356,9 @@ fi
 git -C "$APP_DIR" pull --ff-only
 
 cd "$APP_DIR"
-docker compose ${COMPOSE_ARGS} down
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml down
 
-docker compose ${COMPOSE_ARGS} up -d --build
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 echo "Updated ${CHOSEN_BRANCH} and restarted services."
 UPDATE
