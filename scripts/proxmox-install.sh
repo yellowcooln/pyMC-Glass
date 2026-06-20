@@ -194,6 +194,25 @@ if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
   msg_ok "Tailscale support preconfiguration applied"
 fi
 
+# ── Start container & wait for network ───────────────────────────────────────
+msg_info "Starting container..."
+pct start "$CTID"
+sleep 3
+
+msg_info "Waiting for container network..."
+for _ in $(seq 1 45); do
+    if container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
+if ! container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
+    msg_warn "Container did not reach 8.8.8.8 yet; continuing anyway in case DNS/routing is restricted."
+else
+    msg_ok "Container running with network"
+fi
+
 # ── Bootstrap container ────────────────────────────────────────────────────
 msg_info "Installing Docker, Compose, git, and supporting packages inside container..."
 container_bash "
