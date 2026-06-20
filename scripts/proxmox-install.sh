@@ -215,7 +215,25 @@ fi
 
 if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
   msg_info "Installing Tailscale into LXC using upstream helper script..."
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh)"
+  TAILSCALE_HELPER_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh"
+  TAILSCALE_HELPER_TMP=$(mktemp)
+  TAILSCALE_WHIPTAIL_DIR=$(mktemp -d)
+
+  curl -fsSL "$TAILSCALE_HELPER_URL" -o "$TAILSCALE_HELPER_TMP"
+  chmod +x "$TAILSCALE_HELPER_TMP"
+
+  cat >"$TAILSCALE_WHIPTAIL_DIR/whiptail" <<'WHIPTAIL'
+#!/usr/bin/env bash
+echo "${TS_TAILSCALE_CTID}"
+WHIPTAIL
+  chmod +x "$TAILSCALE_WHIPTAIL_DIR/whiptail"
+
+  msg_info "Running Tailscale helper in non-interactive mode for CT ${CTID}..."
+  TS_TAILSCALE_CTID="$CTID"     PATH="$TAILSCALE_WHIPTAIL_DIR:$PATH"     bash -c 'printf "y\n" | bash "$TAILSCALE_HELPER_TMP"'
+
+  rm -f "$TAILSCALE_HELPER_TMP"
+  rm -rf "$TAILSCALE_WHIPTAIL_DIR"
+
   msg_ok "Tailscale helper ran"
   msg_info "Next steps for Tailscale:"
   echo "  - Reboot the container and run:"
@@ -309,22 +327,32 @@ set -euo pipefail
 APP_DIR='${APP_DIR}'
 COMPOSE_ARGS='--env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml'
 
-cd "$APP_DIR"
+if [ ! -d "$APP_DIR" ]; then
+    echo "ERROR: pyMC Glass directory not found at $APP_DIR"
+    exit 1
+fi
 
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "ERROR: Not a git repository at $APP_DIR"
+    echo "Run this from inside the container where pyMC Glass was installed."
+    exit 1
+fi
+
+CURRENT_BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
 read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " CHOSEN_BRANCH
 CHOSEN_BRANCH="${CHOSEN_BRANCH:-$CURRENT_BRANCH}"
 
-git fetch --all --prune
+git -C "$APP_DIR" fetch --all --prune
 
-if git show-ref --verify --quiet "refs/heads/${CHOSEN_BRANCH}"; then
-    git switch "$CHOSEN_BRANCH"
+if git -C "$APP_DIR" show-ref --verify --quiet "refs/heads/${CHOSEN_BRANCH}"; then
+    git -C "$APP_DIR" switch "$CHOSEN_BRANCH"
 else
-    git switch -c "$CHOSEN_BRANCH" "origin/${CHOSEN_BRANCH}"
+    git -C "$APP_DIR" switch -c "$CHOSEN_BRANCH" "origin/${CHOSEN_BRANCH}"
 fi
 
-git pull --ff-only
+git -C "$APP_DIR" pull --ff-only
 
+cd "$APP_DIR"
 docker compose ${COMPOSE_ARGS} down
 
 docker compose ${COMPOSE_ARGS} up -d --build
