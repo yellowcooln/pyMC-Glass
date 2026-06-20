@@ -335,10 +335,12 @@ if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 CURRENT_BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
-if ! read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " CHOSEN_BRANCH; then
-    CHOSEN_BRANCH="${CURRENT_BRANCH}"
+CHOSEN_BRANCH="${CURRENT_BRANCH}"
+
+if [ -t 0 ]; then
+    read -r -p "Current branch is ${CURRENT_BRANCH}. Branch to update [${CURRENT_BRANCH}]: " INPUT_BRANCH || INPUT_BRANCH=""
+    CHOSEN_BRANCH="${INPUT_BRANCH:-$CURRENT_BRANCH}"
 fi
-CHOSEN_BRANCH="${CHOSEN_BRANCH:-$CURRENT_BRANCH}"
 
 git -C "$APP_DIR" fetch --all --prune
 
