@@ -312,6 +312,10 @@ MOTD
 chmod +x /etc/profile.d/pymc-glass-motd.sh"
 msg_ok "Login banner installed"
 
+# Pre-seed branch variables so this heredoc is safe under set -u.
+CURRENT_BRANCH=main
+CHOSEN_BRANCH=main
+
 msg_info "Installing container update helper and command aliases..."
 container_bash "
     mkdir -p /usr/local/bin
@@ -347,7 +351,7 @@ git -C "$APP_DIR" fetch --all --prune
 if git -C "$APP_DIR" show-ref --verify --quiet "refs/heads/${CHOSEN_BRANCH}"; then
     git -C "$APP_DIR" switch "$CHOSEN_BRANCH"
 else
-    git -C "$APP_DIR" switch -c "$CHOSEN_BRANCH" "origin/${CHOSEN_BRANCH}"
+    git -C "$APP_DIR" switch -c "$CHOSEN_BRANCH" "origin/$CHOSEN_BRANCH"
 fi
 
 git -C "$APP_DIR" pull --ff-only
