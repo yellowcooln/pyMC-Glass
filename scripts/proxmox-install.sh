@@ -27,6 +27,8 @@ APP_ADMIN_EMAIL="admin@pymc.glass"
 APP_ADMIN_PASSWORD="admin12345678"
 APP_FRONTEND_PORT=5173
 APP_BACKEND_PORT=8080
+# Reused Compose command for predictable invocation in container context.
+STACK_COMPOSE_CMD="docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml"
 
 # ── Colors ─────────────────────────────────────────────────────────────────
 RD="\033[01;31m" GN="\033[1;92m" YW="\033[33m" BL="\033[36m" BLD="\033[1m" CL="\033[m"
@@ -305,7 +307,7 @@ echo \"    🪟  Glass UI: http://\$IP:5173\"
 echo \"    🩺  Backend health: http://\$IP:8080/healthz\"
 echo \"\"
 echo \"    Default login: ${APP_ADMIN_EMAIL} / ${APP_ADMIN_PASSWORD}\"
-echo \"    Management: cd ${APP_DIR} && docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml ps\"
+echo \"    Management: cd ${APP_DIR} && ${STACK_COMPOSE_CMD} ps\"
 echo \"    Update: update\"
 echo \"\"
 MOTD
@@ -356,9 +358,9 @@ fi
 git -C "$APP_DIR" pull --ff-only
 
 cd "$APP_DIR"
-docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml down
+${STACK_COMPOSE_CMD} down
 
-docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+${STACK_COMPOSE_CMD} up -d --build
 
 echo "Updated ${CHOSEN_BRANCH} and restarted services."
 UPDATE
@@ -376,15 +378,22 @@ msg_info "Starting pyMC Glass production stack (this can take several minutes)..
 container_bash "
     set -euo pipefail
     cd '${APP_DIR}'
-    docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+    ${STACK_COMPOSE_CMD} up -d --build
 "
 msg_ok "Docker Compose stack started"
 
 msg_info "Waiting for backend health endpoint..."
-for _ in $(seq 1 90); do
+for attempt in $(seq 1 90); do
     if container_exec curl -fsS "http://127.0.0.1:${APP_BACKEND_PORT}/healthz" >/dev/null 2>&1; then
         break
     fi
+
+    if (( attempt % 12 == 0 )); then
+        msg_info "Still waiting (${attempt}/90), dumping service state and recent logs..."
+        container_exec bash -lc "cd '${APP_DIR}' && ${STACK_COMPOSE_CMD} ps"
+        container_exec bash -lc "cd '${APP_DIR}' && ${STACK_COMPOSE_CMD} logs --no-color --tail=60 postgres mosquitto backend pki-init"
+    fi
+
     sleep 5
 done
 
@@ -392,7 +401,9 @@ if container_exec curl -fsS "http://127.0.0.1:${APP_BACKEND_PORT}/healthz" >/dev
     msg_ok "Backend is healthy"
 else
     msg_warn "Backend health endpoint is not ready yet. Check logs with:"
-    echo "    pct exec ${CTID} -- bash -lc 'cd ${APP_DIR} && docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml logs --tail=200'"
+    echo "    pct exec ${CTID} -- bash -lc 'cd ${APP_DIR} && ${STACK_COMPOSE_CMD} logs --tail=200 postgres mosquitto backend pki-init frontend'"
+    echo "    pct exec ${CTID} -- bash -lc 'cd ${APP_DIR} && ${STACK_COMPOSE_CMD} ps'"
+    echo "    pct exec ${CTID} -- bash -lc 'cd ${APP_DIR} && ${STACK_COMPOSE_CMD} ps --services | xargs -r docker inspect -f '\''name={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} pid={{.State.Pid}}'\'''"
 fi
 
 # ── Get container IP ───────────────────────────────────────────────────────
@@ -417,7 +428,7 @@ echo -e "  Container root login:  ${GN}root${CL} / ${GN}${CT_PASSWORD}${CL}"
 echo ""
 echo "  Next: open the Glass UI and change the default admin password after login."
 echo "  Manage: pct enter ${CTID}, then: cd ${APP_DIR}"
-echo "  Logs:   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml logs -f"
+echo "    Logs:   ${STACK_COMPOSE_CMD} logs -f"
 echo "  Tailscale: ready-for-manual-install; use: add tailscale in this container when desired"
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
