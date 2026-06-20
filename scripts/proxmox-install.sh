@@ -156,10 +156,6 @@ read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE
 read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
 read -sp "  Root password [pymc-glass]: " CT_PASSWORD; echo
 CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
-read -r -p "  Install Tailscale on this container? [y/N]: " TAILSCALE_CHOICE
-TAILSCALE_CHOICE="${TAILSCALE_CHOICE,,}"
-INSTALL_TAILSCALE="no"
-[[ "$TAILSCALE_CHOICE" == "y" || "$TAILSCALE_CHOICE" == "yes" ]] && INSTALL_TAILSCALE="yes"
 
 # ── Confirmation ───────────────────────────────────────────────────────────
 echo ""
@@ -167,7 +163,7 @@ echo -e "${BLD}Summary:${CL}"
 echo "  CTID: ${CTID}  Host: ${CT_HOSTNAME}  RAM: ${CT_RAM}MB  Disk: ${CT_DISK}GB"
 echo "  Cores: ${CT_CORES}  Storage: ${CT_STORAGE}  Bridge: ${CT_BRIDGE}  Branch: ${BRANCH}"
 echo "  Mode: privileged (required for Docker Compose in LXC)"
-echo "  Tailscale: ${INSTALL_TAILSCALE}"
+echo "  Tailscale: manual-ready (no auto-install)"
 
 echo ""
 read -p "  Proceed? [Y/n]: " -r
@@ -211,16 +207,15 @@ lxc.cap.drop:
 EOF
 msg_ok "LXC Docker compatibility configured"
 
-if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
-  msg_info "Preconfiguring LXC for Tailscale support..."
-  if ! grep -q '^lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' "/etc/pve/lxc/${CTID}.conf"; then
-    echo "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" >> "/etc/pve/lxc/${CTID}.conf"
-  fi
-  if ! grep -q '^lxc.cgroup2.devices.allow: c 10:200 rwm' "/etc/pve/lxc/${CTID}.conf"; then
-    echo "lxc.cgroup2.devices.allow: c 10:200 rwm" >> "/etc/pve/lxc/${CTID}.conf"
-  fi
-  msg_ok "Tailscale support preconfiguration applied"
+msg_info "Preconfiguring LXC for manual Tailscale support (if desired)..."
+if ! grep -q '^lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' "/etc/pve/lxc/${CTID}.conf"; then
+  echo "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" >> "/etc/pve/lxc/${CTID}.conf"
 fi
+if ! grep -q '^lxc.cgroup2.devices.allow: c 10:200 rwm' "/etc/pve/lxc/${CTID}.conf"; then
+  echo "lxc.cgroup2.devices.allow: c 10:200 rwm" >> "/etc/pve/lxc/${CTID}.conf"
+fi
+msg_ok "Tailscale support preconfiguration applied"
+
 
 # ── Start container & wait for network ───────────────────────────────────────
 msg_info "Starting container..."
@@ -268,31 +263,6 @@ AUTOLOGIN
     systemctl daemon-reload
 "
 msg_ok "Container packages installed"
-
-if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
-  msg_info "Installing Tailscale into LXC using upstream helper script..."
-  TAILSCALE_HELPER_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh"
-  TAILSCALE_WHIPTAIL_DIR=$(mktemp -d)
-
-  # Keep the installer command compatible with the project guidance.
-  # (Use the same upstream helper entrypoint, but force CT selection non-interactively.)
-
-  cat >"$TAILSCALE_WHIPTAIL_DIR/whiptail" <<'WHIPTAIL'
-#!/usr/bin/env bash
-echo "${TS_TAILSCALE_CTID}"
-WHIPTAIL
-  chmod +x "$TAILSCALE_WHIPTAIL_DIR/whiptail"
-
-  msg_info "Running Tailscale helper in non-interactive mode for CT ${CTID}..."
-  printf 'y\n' | TS_TAILSCALE_CTID="${CTID}" PATH="${TAILSCALE_WHIPTAIL_DIR}:$PATH" bash -c "$(curl -fsSL ${TAILSCALE_HELPER_URL})"
-
-  rm -rf "$TAILSCALE_WHIPTAIL_DIR"
-
-  msg_ok "Tailscale helper ran"
-  msg_info "Next steps for Tailscale:"
-  echo "  - Reboot the container and run:"
-  echo "    pct exec ${CTID} -- tailscale up"
-fi
 
 msg_info "Cloning pyMC Glass (branch: ${BRANCH})..."
 container_bash "
@@ -443,5 +413,6 @@ echo ""
 echo "  Next: open the Glass UI and change the default admin password after login."
 echo "  Manage: pct enter ${CTID}, then: cd ${APP_DIR}"
 echo "  Logs:   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml logs -f"
+echo "  Tailscale: ready-for-manual-install; use: add tailscale in this container when desired"
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
