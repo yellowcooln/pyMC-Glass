@@ -266,12 +266,13 @@ echo \"    🩺  Backend health: http://\$IP:8080/healthz\"
 echo \"\"
 echo \"    Default login: ${APP_ADMIN_EMAIL} / ${APP_ADMIN_PASSWORD}\"
 echo \"    Management: cd ${APP_DIR} && docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml ps\"
+echo \"    Update: update\"
 echo \"\"
 MOTD
 chmod +x /etc/profile.d/pymc-glass-motd.sh"
 msg_ok "Login banner installed"
 
-msg_info "Installing container update helper and alias..."
+msg_info "Installing container update helper and command aliases..."
 container_bash "
     mkdir -p /usr/local/bin
     cat > /usr/local/bin/pymc-glass-update <<'UPDATE'
@@ -305,10 +306,13 @@ docker compose ${COMPOSE_ARGS} up -d --build
 echo "Updated ${CHOSEN_BRANCH} and restarted services."
 UPDATE
 chmod +x /usr/local/bin/pymc-glass-update
+ln -sf /usr/local/bin/pymc-glass-update /usr/local/bin/update
 cat > /etc/profile.d/pymc-glass-update-alias.sh <<'ALIAS'
+alias update='/usr/local/bin/pymc-glass-update'
 alias pymc-glass-update='/usr/local/bin/pymc-glass-update'
-ALIAS"
-msg_ok "Update helper and alias installed"
+ALIAS
+"
+msg_ok "Update helper and aliases installed"
 
 # ── Start pyMC Glass ───────────────────────────────────────────────────────
 msg_info "Starting pyMC Glass production stack (this can take several minutes)..."
