@@ -610,7 +610,7 @@ async function queueSync(): Promise<void> {
 function addRule(): void {
   const nextNumber = builder.rules.length + 1;
   builder.rules.push({
-    localId: crypto.randomUUID(),
+    localId: newLocalId(),
     id: `glass-rule-${nextNumber}`,
     name: `Rule ${nextNumber}`,
     enabled: true,
@@ -648,7 +648,7 @@ function moveCondition(ruleIndex: number, conditionIndex: number, delta: number)
 
 function newCondition(): BuilderCondition {
   return {
-    localId: crypto.randomUUID(),
+    localId: newLocalId(),
     field: "hop_count",
     op: "greater_than",
     value: "2",
@@ -733,7 +733,7 @@ function toBuilderRule(value: unknown, index: number): BuilderRule {
   const thenBlock = rule.then && typeof rule.then === "object" && !Array.isArray(rule.then) ? (rule.then as Record<string, unknown>) : {};
   const actionCandidate = thenBlock.action ?? rule.action;
   return {
-    localId: crypto.randomUUID(),
+    localId: newLocalId(),
     id: String(rule.id ?? `glass-rule-${index + 1}`),
     name: String(rule.name ?? `Rule ${index + 1}`),
     enabled: Boolean(rule.enabled ?? true),
@@ -748,7 +748,7 @@ function toBuilderCondition(value: unknown): BuilderCondition {
   const rawValue = condition.value;
   const groupRef = typeof rawValue === "string" && rawValue.startsWith("@");
   return {
-    localId: crypto.randomUUID(),
+    localId: newLocalId(),
     field: String(condition.field ?? "hop_count"),
     op: String(condition.op ?? condition.operator ?? "equals"),
     value: stringifyConditionValue(rawValue),
@@ -793,6 +793,10 @@ function unwrapPolicyEngine(policy: Record<string, unknown>): Record<string, unk
     return nested as Record<string, unknown>;
   }
   return policy;
+}
+
+function newLocalId(): string {
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function isAction(value: unknown): value is Action {
