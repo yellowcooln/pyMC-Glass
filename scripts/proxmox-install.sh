@@ -128,6 +128,10 @@ read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE
 read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
 read -sp "  Root password [pymc-glass]: " CT_PASSWORD; echo
 CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
+read -r -p "  Install Tailscale on this container? [y/N]: " TAILSCALE_CHOICE
+TAILSCALE_CHOICE="${TAILSCALE_CHOICE,,}"
+INSTALL_TAILSCALE="no"
+[[ "$TAILSCALE_CHOICE" == "y" || "$TAILSCALE_CHOICE" == "yes" ]] && INSTALL_TAILSCALE="yes"
 
 # ── Confirmation ───────────────────────────────────────────────────────────
 echo ""
@@ -135,6 +139,8 @@ echo -e "${BLD}Summary:${CL}"
 echo "  CTID: ${CTID}  Host: ${CT_HOSTNAME}  RAM: ${CT_RAM}MB  Disk: ${CT_DISK}GB"
 echo "  Cores: ${CT_CORES}  Storage: ${CT_STORAGE}  Bridge: ${CT_BRIDGE}  Branch: ${BRANCH}"
 echo "  Mode: privileged (required for Docker Compose in LXC)"
+echo "  Tailscale: ${INSTALL_TAILSCALE}"
+
 echo ""
 read -p "  Proceed? [Y/n]: " -r
 [[ "${REPLY:-Y}" =~ ^[Nn]$ ]] && { msg_warn "Aborted"; exit 0; }
@@ -177,6 +183,17 @@ lxc.cap.drop:
 EOF
 msg_ok "LXC Docker compatibility configured"
 
+if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
+  msg_info "Preconfiguring LXC for Tailscale support..."
+  if ! grep -q '^lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' "/etc/pve/lxc/${CTID}.conf"; then
+    echo "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" >> "/etc/pve/lxc/${CTID}.conf"
+  fi
+  if ! grep -q '^lxc.cgroup2.devices.allow: c 10:200 rwm' "/etc/pve/lxc/${CTID}.conf"; then
+    echo "lxc.cgroup2.devices.allow: c 10:200 rwm" >> "/etc/pve/lxc/${CTID}.conf"
+  fi
+  msg_ok "Tailscale support preconfiguration applied"
+fi
+
 # ── Start container & wait for network ─────────────────────────────────────
 msg_info "Starting container..."
 pct start "$CTID"
@@ -194,6 +211,15 @@ if ! container_exec ping -c1 -W1 8.8.8.8 &>/dev/null; then
     msg_warn "Container did not reach 8.8.8.8 yet; continuing anyway in case DNS/routing is restricted."
 else
     msg_ok "Container running with network"
+fi
+
+if [[ "$INSTALL_TAILSCALE" == "yes" ]]; then
+  msg_info "Installing Tailscale into LXC using upstream helper script..."
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/add-tailscale-lxc.sh)"
+  msg_ok "Tailscale helper ran"
+  msg_info "Next steps for Tailscale:"
+  echo "  - Reboot the container and run:"
+  echo "    pct exec ${CTID} -- tailscale up"
 fi
 
 # ── Bootstrap container ────────────────────────────────────────────────────
