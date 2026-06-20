@@ -392,6 +392,7 @@ const fieldOptions = [
   { value: "channel_hash", label: "Channel Hash" },
   { value: "channel_decryptable", label: "Channel Decryptable" },
   { value: "channel_message_body", label: "Channel Message Body" },
+  { value: "channel_sender", label: "Channel Sender" },
   { value: "payload_hex", label: "Payload Hex" },
   { value: "transport_code_0", label: "Transport Code 0" },
   { value: "transport_code_1", label: "Transport Code 1" },
