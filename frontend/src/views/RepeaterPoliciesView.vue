@@ -17,7 +17,7 @@
       <UiPanelCard title="Policy Templates" subtitle="Saved Glass-side repeater Policy Engine documents.">
         <div v-if="templates.length === 0" class="empty-state">No repeater policy templates yet.</div>
         <div v-else class="table-wrap">
-          <table class="data-table">
+          <table class="table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -171,7 +171,7 @@
               </div>
               <div v-if="rule.conditions.length === 0" class="empty-state small">Add at least one condition for this rule to match.</div>
               <div v-else class="conditions-table-wrap">
-                <table class="data-table conditions-table">
+                <table class="table conditions-table">
                   <thead>
                     <tr>
                       <th>Drag</th>
@@ -349,24 +349,32 @@
       </div>
     </UiPanelCard>
 
-    <UiPanelCard title="Sync Status" subtitle="Latest queued policy sync per repeater.">
+    <UiPanelCard title="Sync Status" subtitle="Latest policy sync state per repeater.">
       <div v-if="syncStatuses.length === 0" class="empty-state">No policy sync commands queued yet.</div>
       <div v-else class="table-wrap">
-        <table class="data-table">
+        <table class="table sync-status-table">
           <thead>
             <tr>
               <th>Repeater</th>
               <th>Status</th>
               <th>Command</th>
-              <th>Updated</th>
+              <th>Last update</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="status in syncStatuses" :key="status.repeater_id">
-              <td>{{ status.node_name }}</td>
+              <td>
+                <strong>{{ status.node_name }}</strong>
+                <span v-if="status.error_message" class="muted-block text-rose-300">{{ status.error_message }}</span>
+              </td>
               <td><StatusPill :status="status.status" /></td>
-              <td class="mono-value">{{ status.command_id || "—" }}</td>
-              <td>{{ formatTimestamp(status.updated_at) }}</td>
+              <td>
+                <code v-if="status.command_id" class="command-id" :title="status.command_id">
+                  {{ formatCommandId(status.command_id) }}
+                </code>
+                <span v-else>—</span>
+              </td>
+              <td class="nowrap-cell">{{ formatTimestamp(status.updated_at) }}</td>
             </tr>
           </tbody>
         </table>
@@ -973,6 +981,11 @@ function isAction(value: unknown): value is Action {
 function ruleCount(policy: Record<string, unknown>): number {
   return Array.isArray(policy.rules) ? policy.rules.length : 0;
 }
+
+function formatCommandId(commandId: string | null): string {
+  if (!commandId) return "—";
+  return commandId.length > 14 ? `${commandId.slice(0, 8)}…${commandId.slice(-4)}` : commandId;
+}
 </script>
 
 <style scoped>
@@ -1009,6 +1022,43 @@ function ruleCount(policy: Record<string, unknown>): number {
 
 .toggle-row.compact {
   margin: 0;
+}
+
+.sync-status-table {
+  table-layout: fixed;
+}
+
+.sync-status-table th:nth-child(1),
+.sync-status-table td:nth-child(1) {
+  width: 38%;
+}
+
+.sync-status-table th:nth-child(2),
+.sync-status-table td:nth-child(2) {
+  width: 7.5rem;
+}
+
+.sync-status-table th:nth-child(3),
+.sync-status-table td:nth-child(3) {
+  width: 12rem;
+}
+
+.sync-status-table th:nth-child(4),
+.sync-status-table td:nth-child(4) {
+  width: 13rem;
+}
+
+.command-id {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.nowrap-cell {
+  white-space: nowrap;
 }
 
 .editor-mode-row,
