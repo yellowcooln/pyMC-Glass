@@ -13,6 +13,7 @@
         <div class="brand-glyph">
           <img class="brand-logo" :src="logoImage" alt="openHop Glass logo" />
         </div>
+        <span class="brand-title">Glass</span>
       </router-link>
       <div v-if="!mobile" class="sidebar-toggle-row">
         <button
@@ -137,7 +138,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { appState } from "../../state/appState";
-import logoImage from "../../logo.png";
+import logoImage from "../../assets/logo/openhop_transparent_trim.png";
 
 type NavIconName =
   | "dashboard"
@@ -491,6 +492,7 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
 .brand-link {
   position: relative;
   display: inline-flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   min-width: 0;
@@ -507,10 +509,12 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
   position: relative;
   display: grid;
   place-items: center;
-  width: 101px;
-  height: 101px;
+  width: 140px;
+  height: 104px;
   border-radius: 0.8rem;
-  background: transparent;
+  background: radial-gradient(circle at 25% 20%, rgba(96, 165, 250, 0.16), transparent 46%),
+    linear-gradient(145deg, #020617, #0f172a 58%, #111827);
+  border: 1px solid rgba(148, 163, 184, 0.24);
   overflow: hidden;
   flex: 0 0 auto;
   transform: translateZ(0);
@@ -526,19 +530,38 @@ function filterItemsByRole(items: NavItem[]): NavItem[] {
 }
 
 .collapsed .brand-glyph {
-  width: 52px;
-  height: 52px;
+  width: 60px;
+  height: 44px;
+}
+
+.brand-title {
+  margin-top: -0.08rem;
+  color: var(--sidebar-label-color);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.collapsed .brand-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
 .brand-logo {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
   object-fit: contain;
   border-radius: inherit;
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+.collapsed .brand-logo {
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
 }
 
 .nav-action-btn {
