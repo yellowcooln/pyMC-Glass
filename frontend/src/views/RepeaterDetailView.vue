@@ -147,9 +147,25 @@
                 </div>
                 <p class="section-subtitle">{{ sensor.ok ? "OK" : sensor.error || "Error" }} · {{ sensor.timestamp || "no timestamp" }}</p>
                 <div class="metric-grid compact-metrics">
-                  <div v-for="metric in sensor.metrics" :key="metric.key" class="metric-item">
-                    <span>{{ metric.label }}</span>
-                    <strong>{{ metric.value }}</strong>
+                  <div
+                    v-for="metric in sensor.metrics"
+                    :key="metric.key"
+                    class="metric-item"
+                    :class="{ 'metric-group': metric.children?.length }"
+                  >
+                    <template v-if="metric.children?.length">
+                      <span>{{ metric.label }}</span>
+                      <div class="nested-metrics">
+                        <div v-for="child in metric.children" :key="child.key" class="nested-metric">
+                          <span>{{ child.label }}</span>
+                          <strong>{{ child.value }}</strong>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <span>{{ metric.label }}</span>
+                      <strong>{{ metric.value }}</strong>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -315,7 +331,8 @@ interface GaugeMetric {
 interface SensorMetric {
   key: string;
   label: string;
-  value: string;
+  value?: string;
+  children?: SensorMetric[];
 }
 
 interface SensorReadingDisplay {
@@ -688,12 +705,49 @@ function toSensorDisplay(reading: Record<string, unknown>, index: number): Senso
     ok: reading.ok !== false,
     timestamp: typeof reading.timestamp === "string" ? reading.timestamp : null,
     error: typeof reading.error === "string" ? reading.error : null,
-    metrics: Object.entries(data).slice(0, 8).map(([key, rawValue]) => ({
+    metrics: Object.entries(data).map(([key, rawValue]) => toSensorMetric(key, rawValue)),
+  };
+}
+
+function toSensorMetric(key: string, rawValue: unknown): SensorMetric {
+  if (isRecord(rawValue)) {
+    return {
       key,
       label: humanizeKey(key),
-      value: formatSensorValue(rawValue),
-    })),
+      children: flattenSensorChildren(rawValue, key),
+    };
+  }
+  if (Array.isArray(rawValue)) {
+    return {
+      key,
+      label: humanizeKey(key),
+      value: rawValue.map((item) => formatSensorValue(item, key)).join(", ") || "—",
+    };
+  }
+  return {
+    key,
+    label: humanizeKey(key),
+    value: formatSensorValue(rawValue, key),
   };
+}
+
+function flattenSensorChildren(record: Record<string, unknown>, parentKey: string): SensorMetric[] {
+  const metrics: SensorMetric[] = [];
+  for (const [childKey, childValue] of Object.entries(record)) {
+    const fullKey = `${parentKey}.${childKey}`;
+    if (isRecord(childValue)) {
+      metrics.push(...flattenSensorChildren(childValue, fullKey));
+      continue;
+    }
+    metrics.push({
+      key: fullKey,
+      label: humanizeKey(childKey),
+      value: Array.isArray(childValue)
+        ? childValue.map((item) => formatSensorValue(item, fullKey)).join(", ") || "—"
+        : formatSensorValue(childValue, fullKey),
+    });
+  }
+  return metrics;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -701,11 +755,52 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function humanizeKey(value: string): string {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value.replace(/[_.]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatSensorValue(value: unknown): string {
+function formatSensorValue(value: unknown, key = ""): string {
   if (typeof value === "number") {
+    const normalizedKey = key.toLowerCase().split(".").pop() || key.toLowerCase();
+    if (normalizedKey.includes("percent") || normalizedKey.endsWith("pct")) {
+      return `${value.toFixed(1)}%`;
+    }
+    if (
+      normalizedKey.includes("bytes") ||
+      ["free", "used", "total", "available"].includes(normalizedKey)
+    ) {
+      return formatBytes(value);
+    }
+    if (normalizedKey.includes("uptime")) {
+      return formatUptime(value);
+    }
+    if (normalizedKey.includes("boot_time")) {
+      return formatTimestamp(new Date(value * 1000).toISOString());
+    }
+    if (
+      normalizedKey.includes("temperature") ||
+      normalizedKey.startsWith("coretemp") ||
+      normalizedKey.startsWith("nvme")
+    ) {
+      return formatTemp(value);
+    }
+    if (normalizedKey.includes("voltage_v")) {
+      return `${value.toFixed(3)} V`;
+    }
+    if (normalizedKey.includes("voltage_mv")) {
+      return `${value.toFixed(0)} mV`;
+    }
+    if (normalizedKey.includes("current_ma")) {
+      return `${value.toFixed(1)} mA`;
+    }
+    if (normalizedKey.includes("power_mw")) {
+      return `${value.toFixed(1)} mW`;
+    }
+    if (normalizedKey.includes("power_w")) {
+      return `${value.toFixed(2)} W`;
+    }
+    if (normalizedKey.includes("frequency")) {
+      return `${value.toFixed(0)} MHz`;
+    }
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
   }
   if (typeof value === "boolean") {
@@ -718,7 +813,7 @@ function formatSensorValue(value: unknown): string {
     return value;
   }
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }
@@ -1011,7 +1106,7 @@ function diagnosticSeverityClass(severity: string): string {
   border: 1px solid rgba(173, 193, 222, 0.22);
   border-radius: 10px;
   padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.42);
+  background: color-mix(in srgb, var(--color-surface) 76%, var(--color-background-mute) 24%);
 }
 
 .sensor-title-row {
@@ -1030,6 +1125,43 @@ function diagnosticSeverityClass(severity: string): string {
 .compact-metrics {
   margin-top: 0.55rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-group {
+  grid-column: 1 / -1;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.nested-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.nested-metric {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(173, 193, 222, 0.14);
+  background: color-mix(in srgb, var(--color-background-mute) 72%, transparent);
+  padding: 0.45rem;
+}
+
+.nested-metric span {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nested-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
 }
 
 .json-block {
