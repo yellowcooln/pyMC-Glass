@@ -1,19 +1,19 @@
-# Repeater dev handoff: Sensor telemetry for Glass
+# Repeater handoff: Sensor telemetry for Glass
 
-_Last checked against Repeater dev commit `c0d919c` (`rightup/pyMC_Repeater` `origin/dev`, fetched 2026-06-24)._
+_Last checked against Repeater commit `c0d919c` (`rightup/pyMC_Repeater` `origin/dev`, fetched 2026-06-24)._
 
 ## Current status
 
 openHop Glass is ready to accept a top-level `/inform` field named `sensors` and render it on the repeater detail page as “Sensor Readings”.
 
-The current Repeater dev branch already has:
+The current Repeater branch already has:
 
 - `SensorManager.get_summary()` in `repeater/sensors/manager.py`
 - sensor subsystem config under `sensors` in `config.yaml.example`
 - `RepeaterDaemon.get_stats()` adding `stats["sensors"] = sensor_manager.get_summary()`
 - sensor plugins including `waveshare_ups_d`, `waveshare_ups_e`, `lafvin_ups_3s`, `ina219`, `ens210`, `hardware_stats`, and `pymc_modem`
 
-The current Repeater dev branch does **not** yet include `sensors` in the Glass `/inform` payload built by `repeater/data_acquisition/glass_handler.py`. As of commit `c0d919c`, `_build_inform_payload()` returns `type`, `version`, identity, system/radio/counter fields, `settings`, and `command_results`, but not `sensors`.
+The current Repeater branch does **not** yet include `sensors` in the Glass `/inform` payload built by `repeater/data_acquisition/glass_handler.py`. As of commit `c0d919c`, `_build_inform_payload()` returns `type`, `version`, identity, system/radio/counter fields, `settings`, and `command_results`, but not `sensors`.
 
 So the remaining Repeater-side work is to attach the existing `SensorManager.get_summary()` output to the Glass inform payload.
 
@@ -131,9 +131,9 @@ Keep values JSON-safe:
 - no bytes objects
 - no secrets
 
-## UPS and battery field names in current Repeater dev
+## UPS and battery field names in current Repeater
 
-Glass renders unknown sensor fields generically, so it does not require a fixed UPS schema. However, current Repeater dev sensors already use these keys and future first-class gauges should prefer them:
+Glass renders unknown sensor fields generically, so it does not require a fixed UPS schema. However, current Repeater sensors already use these keys and future first-class gauges should prefer them:
 
 Common:
 

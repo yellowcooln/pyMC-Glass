@@ -1,12 +1,12 @@
-# Repeater dev handoff: Glass `policy_sync`
+# Repeater handoff: Glass `policy_sync`
 
-_Last checked against Repeater dev commit `c0d919c` (`rightup/pyMC_Repeater` `origin/dev`, fetched 2026-06-24)._
+_Last checked against Repeater commit `c0d919c` (`rightup/pyMC_Repeater` `origin/dev`, fetched 2026-06-24)._
 
 ## Current status
 
 openHop Glass can build, validate, store, and queue Repeater Policy Engine templates. Glass queues a normal `/inform` command with action `policy_sync`.
 
-The current Repeater dev branch does **not** yet execute `policy_sync` in `repeater/data_acquisition/glass_handler.py`. As of `c0d919c`, `GlassHandler._execute_command_action()` supports:
+The current Repeater branch does **not** yet execute `policy_sync` in `repeater/data_acquisition/glass_handler.py`. As of `c0d919c`, `GlassHandler._execute_command_action()` supports:
 
 - `restart_service`
 - `send_advert`
@@ -19,7 +19,7 @@ The current Repeater dev branch does **not** yet execute `policy_sync` in `repea
 - `run_diagnostic`
 - `export_config`
 
-So this document remains the implementation contract for adding `policy_sync` to Repeater dev.
+So this document remains the implementation contract for adding `policy_sync` to Repeater.
 
 ## Glass command shape
 
@@ -62,7 +62,7 @@ Notes:
 
 ## Repeater policy file shape
 
-Repeater dev stores policy config as a wrapper document. The Glass policy object should be written under `policy_engine`:
+Repeater stores policy config as a wrapper document. The Glass policy object should be written under `policy_engine`:
 
 ```yaml
 policy_engine:
@@ -125,9 +125,9 @@ Add `_apply_policy_sync(params)` with this behavior:
 
 The path `/etc/pymc_repeater/policy.yaml` is still the current Repeater default path. Do not rename it only for branding.
 
-## Reuse existing Repeater dev code
+## Reuse existing Repeater code
 
-The newest Repeater dev branch already has the needed policy helpers in `repeater/web/api_endpoints.py`:
+The newest Repeater branch already has the needed policy helpers in `repeater/web/api_endpoints.py`:
 
 - `POLICY_GROUP_KINDS`
 - `_normalize_policy_groups`
@@ -152,7 +152,7 @@ Glass policy editor pre-stages object groups under:
 - `objects.channel_hash_groups`
 - `objects.pubkey_groups`
 
-Repeater dev `PolicyEngine` currently supports object reference resolution with `@group.key` lookups from `policy_engine.objects`. It also supports channel secret/hash matching through `objects.channels` and `objects.channel_hash_groups`.
+Repeater `PolicyEngine` currently supports object reference resolution with `@group.key` lookups from `policy_engine.objects`. It also supports channel secret/hash matching through `objects.channels` and `objects.channel_hash_groups`.
 
 Keep field support aligned with `repeater/policy_engine.py`, including the currently supported condition fields:
 
@@ -206,7 +206,7 @@ After Repeater implementation:
 
 1. Create or select a Repeater Runtime Policy template in Glass.
 2. Add a policy group and a rule that references it, e.g. `@channel_hash_groups.blocked_channels`.
-3. Queue `policy_sync` to a Repeater running the current dev branch.
+3. Queue `policy_sync` to a Repeater running the current branch.
 4. Confirm the next Repeater `/inform` receives `action="policy_sync"`.
 5. Confirm Repeater reports command result `success` on a following `/inform`.
 6. Confirm Repeater `policy.yaml` contains the policy under `policy_engine` with preserved/merged `groups`.

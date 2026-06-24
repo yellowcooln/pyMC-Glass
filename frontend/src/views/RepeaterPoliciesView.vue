@@ -291,7 +291,7 @@
           <div class="policy-section-header">
             <div>
               <h3 class="policy-section-title">Policy Groups</h3>
-              <p class="section-subtitle">Pre-stage Repeater dev policy groups; these update the policy objects JSON used by group references.</p>
+              <p class="section-subtitle">Pre-stage Repeater policy groups; these update the policy objects JSON used by group references.</p>
             </div>
           </div>
           <div class="grid-2">
