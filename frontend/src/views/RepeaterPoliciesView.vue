@@ -107,6 +107,28 @@
       </div>
 
       <div v-if="editorMode === 'builder'" class="policy-builder">
+        <section class="policy-builder-section tab-section">
+          <div class="editor-mode-row builder-tab-row">
+            <button
+              class="btn"
+              :class="builderTab === 'policy' ? 'btn-primary' : 'btn-secondary'"
+              type="button"
+              @click="builderTab = 'policy'"
+            >
+              Policy
+            </button>
+            <button
+              class="btn"
+              :class="builderTab === 'objects' ? 'btn-primary' : 'btn-secondary'"
+              type="button"
+              @click="builderTab = 'objects'"
+            >
+              Objects
+            </button>
+          </div>
+        </section>
+
+        <template v-if="builderTab === 'policy'">
         <section class="policy-builder-section">
           <div class="grid-2">
             <label class="toggle-row builder-toggle">
@@ -200,16 +222,35 @@
                         </select>
                       </td>
                       <td>
-                        <select v-model="condition.valueSource" class="field table-field" @change="syncJsonFromBuilder">
+                        <select v-model="condition.valueSource" class="field table-field" @change="onConditionValueSourceChange(condition)">
                           <option value="literal">Literal</option>
                           <option value="group">Group</option>
                         </select>
                       </td>
                       <td>
+                        <div v-if="condition.valueSource === 'group'" class="group-ref-controls">
+                          <select
+                            v-model="condition.groupKind"
+                            class="field table-field"
+                            @change="onConditionGroupKindChange(condition)"
+                          >
+                            <option value="channel_hash_groups">Channel hash group</option>
+                            <option value="pubkey_groups">Pubkey group</option>
+                          </select>
+                          <select
+                            v-model="condition.groupId"
+                            class="field table-field"
+                            @change="syncJsonFromBuilder"
+                          >
+                            <option value="">Select group</option>
+                            <option v-for="name in groupNamesForKind(condition.groupKind)" :key="name" :value="name">{{ name }}</option>
+                          </select>
+                        </div>
                         <input
+                          v-else
                           v-model="condition.value"
                           class="field table-field value-field"
-                          :placeholder="condition.valueSource === 'group' ? '@channel_hash_groups.blocked' : 'value'"
+                          placeholder="value"
                           @input="syncJsonFromBuilder"
                         />
                       </td>
@@ -233,6 +274,9 @@
           </article>
         </section>
 
+        </template>
+
+        <template v-else>
         <section class="policy-builder-section">
           <div class="policy-section-header">
             <div>
@@ -297,6 +341,7 @@
             </span>
           </div>
         </section>
+        </template>
       </div>
 
       <div v-else>
@@ -407,6 +452,7 @@ import type {
 type Action = "allow" | "drop" | "log_only";
 type Logic = "all" | "any";
 type EditorMode = "builder" | "json";
+type BuilderTab = "policy" | "objects";
 type RuleValueType = "string" | "number" | "boolean";
 type ValueSource = "literal" | "group";
 type PolicyObjectGroupKind = "channel_hash_groups" | "pubkey_groups";
@@ -418,7 +464,7 @@ type BuilderCondition = {
   value: string;
   valueType: RuleValueType;
   valueSource: ValueSource;
-  groupKind?: "channel_hashes" | "pubkeys";
+  groupKind?: PolicyObjectGroupKind;
   groupId?: string;
 };
 
@@ -482,6 +528,7 @@ const syncStatuses = ref<RepeaterPolicySyncStatusResponse[]>([]);
 const selectedTemplate = ref<RepeaterPolicyTemplateResponse | null>(null);
 const validation = ref<RepeaterPolicyValidateResponse | null>(null);
 const editorMode = ref<EditorMode>("builder");
+const builderTab = ref<BuilderTab>("policy");
 
 const form = reactive({
   name: "",
@@ -719,6 +766,21 @@ function removeCondition(ruleIndex: number, conditionIndex: number): void {
   syncJsonFromBuilder();
 }
 
+function onConditionValueSourceChange(condition: BuilderCondition): void {
+  if (condition.valueSource === "group") {
+    condition.groupKind = condition.groupKind || "channel_hash_groups";
+    const names = groupNamesForKind(condition.groupKind);
+    condition.groupId = condition.groupId || names[0] || "";
+  }
+  syncJsonFromBuilder();
+}
+
+function onConditionGroupKindChange(condition: BuilderCondition): void {
+  const names = groupNamesForKind(condition.groupKind);
+  condition.groupId = names.includes(condition.groupId || "") ? condition.groupId : names[0] || "";
+  syncJsonFromBuilder();
+}
+
 function moveCondition(ruleIndex: number, conditionIndex: number, delta: number): void {
   const conditions = builder.rules[ruleIndex]?.conditions;
   if (!conditions) return;
@@ -752,6 +814,11 @@ function objectGroupsForKind(kind: PolicyObjectGroupKind): Record<string, string
 
 function selectedObjectGroupValues(name: string): string[] {
   return objectGroupsForKind(groupForm.kind)[name] || [];
+}
+
+function groupNamesForKind(kind?: PolicyObjectGroupKind): string[] {
+  if (!kind) return [];
+  return Object.keys(objectGroupsForKind(kind)).sort((a, b) => a.localeCompare(b));
 }
 
 function addObjectGroup(): void {
@@ -829,6 +896,8 @@ function newCondition(): BuilderCondition {
     value: "2",
     valueType: "number",
     valueSource: "literal",
+    groupKind: "channel_hash_groups",
+    groupId: "",
   };
 }
 
@@ -922,6 +991,9 @@ function toBuilderCondition(value: unknown): BuilderCondition {
   const condition = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   const rawValue = condition.value;
   const groupRef = typeof rawValue === "string" && rawValue.startsWith("@");
+  const groupParts = groupRef ? rawValue.slice(1).split(".", 2) : [];
+  const groupKind: PolicyObjectGroupKind = groupParts[0] === "pubkey_groups" ? "pubkey_groups" : "channel_hash_groups";
+  const groupId = groupParts[1] || "";
   return {
     localId: newLocalId(),
     field: String(condition.field ?? "hop_count"),
@@ -929,12 +1001,17 @@ function toBuilderCondition(value: unknown): BuilderCondition {
     value: stringifyConditionValue(rawValue),
     valueType: inferValueType(rawValue),
     valueSource: groupRef ? "group" : "literal",
+    groupKind,
+    groupId,
   };
 }
 
 function conditionValueForPolicy(condition: BuilderCondition): unknown {
   if (condition.valueSource === "group") {
-    return condition.value.trim().startsWith("@") ? condition.value.trim() : `@${condition.value.trim()}`;
+    const groupKind = condition.groupKind || "channel_hash_groups";
+    const fallbackId = condition.value.trim().replace(/^@?[^.]+\./, "");
+    const groupId = condition.groupId || fallbackId;
+    return groupId ? `@${groupKind}.${groupId}` : `@${groupKind}`;
   }
   return parseConditionValue(condition.value, condition.valueType);
 }
@@ -1082,17 +1159,25 @@ function formatCommandId(commandId: string | null): string {
   gap: 1rem;
 }
 
+.tab-section {
+  background: color-mix(in srgb, var(--color-background-mute) 62%, var(--color-surface) 38%);
+}
+
+.builder-tab-row {
+  justify-content: flex-start;
+}
+
 .policy-builder-section,
 .rule-card {
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 1rem;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.28);
+  background: color-mix(in srgb, var(--color-surface) 78%, var(--color-background-mute) 22%);
 }
 
 .policy-section-title,
 .condition-title {
-  color: rgb(226 232 240);
+  color: var(--color-text-primary);
   font-weight: 700;
   margin: 0;
 }
@@ -1144,6 +1229,12 @@ function formatCommandId(commandId: string | null): string {
   margin-bottom: 0.1rem;
 }
 
+.group-ref-controls {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 13rem;
+}
+
 .empty-state.small {
   padding: 0.7rem;
 }
@@ -1167,8 +1258,8 @@ function formatCommandId(commandId: string | null): string {
 }
 
 .policy-group-chip {
-  background: rgba(15, 23, 42, 0.55);
-  color: rgb(226 232 240);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-background-mute) 18%);
+  color: var(--color-text-primary);
 }
 
 .policy-group-chip.selected {
@@ -1183,7 +1274,7 @@ function formatCommandId(commandId: string | null): string {
 
 .entry-pill {
   background: rgba(34, 211, 238, 0.08);
-  color: rgb(226 232 240);
+  color: var(--color-text-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.8rem;
 }
