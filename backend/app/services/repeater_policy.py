@@ -4,6 +4,13 @@ import hashlib
 import json
 from typing import Any
 
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.models import RepeaterPolicySyncStatus
+
 SUPPORTED_ACTIONS = {"allow", "drop", "log_only"}
 SUPPORTED_LOGICAL_KEYS = {"all", "any"}
 
@@ -41,6 +48,51 @@ def normalize_policy_document(policy: dict[str, Any]) -> dict[str, Any]:
 def policy_payload_hash(policy: dict[str, Any]) -> str:
     encoded = json.dumps(policy, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def mark_repeater_policy_sync_dispatched(
+    db: Session,
+    *,
+    repeater_id: str,
+    command_id: str,
+) -> None:
+    row = db.scalar(select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id))
+    if row is None:
+        row = RepeaterPolicySyncStatus(repeater_id=repeater_id)
+        db.add(row)
+    now = _utc_now()
+    row.command_id = command_id
+    row.status = "dispatched"
+    row.dispatched_at = now
+    row.updated_at = now
+
+
+def mark_repeater_policy_sync_result(
+    db: Session,
+    *,
+    repeater_id: str,
+    command_id: str,
+    status: str,
+    message: str | None,
+    completed_at: datetime | None,
+) -> None:
+    row = db.scalar(select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id))
+    if row is None:
+        row = RepeaterPolicySyncStatus(repeater_id=repeater_id)
+        db.add(row)
+    normalized_status = status.lower().strip()
+    if normalized_status not in {"success", "failed", "partial"}:
+        normalized_status = "failed"
+    now = _utc_now()
+    row.command_id = command_id
+    row.status = normalized_status
+    row.error_message = message if normalized_status in {"failed", "partial"} else None
+    row.completed_at = completed_at or now
+    row.updated_at = now
 
 
 def validate_policy_document(policy: dict[str, Any]) -> list[str]:

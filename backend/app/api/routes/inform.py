@@ -19,6 +19,10 @@ from app.services.config_snapshot import (
     SnapshotPayloadError,
 )
 from app.services.pki import PkiService
+from app.services.repeater_policy import (
+    mark_repeater_policy_sync_dispatched,
+    mark_repeater_policy_sync_result,
+)
 from app.services.system_settings import (
     get_effective_config_snapshot_encryption_keys,
     get_effective_managed_mqtt_settings,
@@ -397,6 +401,15 @@ def inform(
                 message=result.message,
                 completed_at=result.completed_at,
             )
+        if queued.command == "policy_sync":
+            mark_repeater_policy_sync_result(
+                db,
+                repeater_id=repeater.id,
+                command_id=queued.id,
+                status=result.status,
+                message=result.message,
+                completed_at=result.completed_at,
+            )
         write_audit_log(
             db,
             action="command_result_ingested",
@@ -438,6 +451,12 @@ def inform(
         next_command.status = "dispatched"
         if next_command.command == "transport_keys_sync":
             mark_transport_key_sync_dispatched(
+                db,
+                repeater_id=repeater.id,
+                command_id=next_command.id,
+            )
+        if next_command.command == "policy_sync":
+            mark_repeater_policy_sync_dispatched(
                 db,
                 repeater_id=repeater.id,
                 command_id=next_command.id,

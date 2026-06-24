@@ -312,6 +312,74 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
     assert "command_queue" in sources
 
 
+def test_policy_sync_updates_runtime_policy_status(client) -> None:
+    _bootstrap_admin(client)
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    node_name = "mesh-repeater-policy-sync"
+
+    first_inform = client.post("/inform", json=_inform_payload(node_name))
+    assert first_inform.status_code == 200
+    pending = client.get("/api/adoption/pending", headers=headers)
+    repeater_id = pending.json()[0]["id"]
+    adopt = client.post(
+        f"/api/adoption/{repeater_id}/adopt",
+        json={"note": "approved"},
+        headers=headers,
+    )
+    assert adopt.status_code == 200
+
+    policy = {"enabled": True, "default_action": "allow", "rules": [], "objects": {}}
+    template = client.post(
+        "/api/repeater-policies/templates",
+        json={"name": "No-op test policy", "enabled": True, "policy": policy},
+        headers=headers,
+    )
+    assert template.status_code == 201
+    sync = client.post(
+        "/api/repeater-policies/sync",
+        json={"template_id": template.json()["id"], "repeater_ids": [repeater_id], "mode": "replace"},
+        headers=headers,
+    )
+    assert sync.status_code == 200
+    command_id = sync.json()["command_ids"][0]
+
+    cert_response = client.post("/inform", json=_inform_payload(node_name))
+    assert cert_response.status_code == 200
+    assert cert_response.json()["type"] == "cert_renewal"
+
+    dispatched = client.post("/inform", json=_inform_payload(node_name))
+    assert dispatched.status_code == 200
+    assert dispatched.json()["type"] == "command"
+    assert dispatched.json()["command_id"] == command_id
+    assert dispatched.json()["action"] == "policy_sync"
+
+    statuses = client.get("/api/repeater-policies/sync-status", headers=headers)
+    assert statuses.status_code == 200
+    assert statuses.json()[0]["status"] == "dispatched"
+    assert statuses.json()[0]["dispatched_at"] is not None
+
+    result_payload = _inform_payload(node_name)
+    result_payload["command_results"] = [
+        {
+            "command_id": command_id,
+            "status": "success",
+            "message": "Policy synchronized",
+            "completed_at": "2026-04-15T12:30:45Z",
+            "details": {"rule_count": 0, "enabled": True, "default_action": "allow"},
+        }
+    ]
+    completed = client.post("/inform", json=result_payload)
+    assert completed.status_code == 200
+
+    completed_statuses = client.get("/api/repeater-policies/sync-status", headers=headers)
+    assert completed_statuses.status_code == 200
+    body = completed_statuses.json()[0]
+    assert body["status"] == "success"
+    assert body["error_message"] is None
+    assert body["completed_at"] == "2026-04-15T12:30:45"
+
+
 def test_inform_renews_when_reported_cert_is_near_expiry(client) -> None:
     _bootstrap_admin(client)
     token = _login(client)
