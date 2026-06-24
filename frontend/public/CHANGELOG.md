@@ -23,6 +23,10 @@ All notable changes to this project are documented in this file.
 - Added Repeater policy_sync, sensor telemetry, openHop migration, and expanded project documentation.
 - Updated Repeater terminology and removed stale development wording.
 
+### Chores
+
+- Updated backend and frontend dependencies to current versions and cleared npm audit findings.
+
 ## [1.0.4] - 2026-04-21
 
 ### Chores
