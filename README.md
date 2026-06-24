@@ -16,7 +16,7 @@ The stack is built for self-hosted deployments and runs as Docker Compose servic
   - packet list and packet summaries
   - topology/neighborhood insights
   - MQTT telemetry event stream
-  - generic Sensor / UPS reading display for repeater-provided sensor summaries
+  - generic sensor reading display for repeater-provided sensor summaries
 
 - Command and config management
   - queue commands for repeaters through the inform control loop
@@ -332,7 +332,7 @@ Repeater-side implementation notes for policy sync live in:
 docs/repeater-policy-sync-implementation.md
 ```
 
-## Sensor / UPS telemetry workflow
+## Sensor telemetry workflow
 
 Glass is ready to accept repeater sensor summaries in the top-level `/inform` field `sensors`.
 

@@ -1,10 +1,10 @@
-# Repeater dev handoff: Sensor/UPS telemetry for Glass
+# Repeater dev handoff: Sensor telemetry for Glass
 
 _Last checked against Repeater dev commit `c0d919c` (`rightup/pyMC_Repeater` `origin/dev`, fetched 2026-06-24)._
 
 ## Current status
 
-openHop Glass is ready to accept a top-level `/inform` field named `sensors` and render it on the repeater detail page as “Sensor / UPS Readings”.
+openHop Glass is ready to accept a top-level `/inform` field named `sensors` and render it on the repeater detail page as “Sensor Readings”.
 
 The current Repeater dev branch already has:
 
@@ -213,5 +213,5 @@ After Repeater implementation:
 3. Confirm Repeater Glass `/inform` payload includes top-level `sensors`.
 4. Confirm Glass accepts `/inform` without contract errors.
 5. In Glass, open the repeater detail page.
-6. Confirm the “Sensor / UPS Readings” section shows each reading and data value.
+6. Confirm the “Sensor Readings” section shows each reading and data value.
 7. Confirm a sensor exception does not break the Glass inform loop.

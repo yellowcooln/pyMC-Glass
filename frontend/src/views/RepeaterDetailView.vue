@@ -135,7 +135,7 @@
             </div>
           </div>
           <div class="sensor-section">
-            <h3>Sensor / UPS Readings</h3>
+            <h3>Sensor Readings</h3>
             <p v-if="sensorReadings.length === 0" class="section-subtitle">
               No sensor readings reported yet. Glass is ready to accept repeater-provided sensor summaries.
             </p>
