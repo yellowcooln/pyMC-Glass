@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
 
     database_url: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/openhop_glass"
+        default="postgresql+psycopg://postgres:postgres@localhost:5432/pymc_glass"
     )
     mqtt_broker_host: str = "localhost"
     mqtt_broker_port: int = 1883
