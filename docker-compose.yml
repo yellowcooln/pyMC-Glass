@@ -1,3 +1,5 @@
+name: openhop-glass
+
 services:
   pki-init:
     build:
