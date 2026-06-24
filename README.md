@@ -427,7 +427,7 @@ The seed admin is only created when the user table is empty. If users already ex
 
 ## Versioning and changelog
 
-The backend and frontend currently track version `1.0.4`.
+The backend and frontend currently track version `1.1.0`.
 
 Changelog helpers:
 

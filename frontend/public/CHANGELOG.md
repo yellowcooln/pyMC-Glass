@@ -1,5 +1,28 @@
 # Changelog
 All notable changes to this project are documented in this file.
+## [1.1.0] - 2026-06-24
+
+### Features
+
+- Added Glass-side Repeater Runtime Policy management with template storage, validation, visual editing, JSON editing, and policy_sync queueing.
+- Added Repeater policy object/group management in Glass, including channel hash groups, pubkey groups, and group-backed rule conditions.
+- Added Repeater policy sync status tracking so Glass records queued, dispatched, success, failed, and partial policy_sync results per repeater.
+- Added Repeater sensor telemetry rendering in Glass, including generic nested sensor metrics labeled as Sensor Readings.
+- Added Repeater-style UI polish for the theme toggle, light-mode sidebar contrast, and runtime policy tables.
+- Added Proxmox LXC installer/update helper support for Glass with Repeater-aligned prompt defaults.
+- Rebranded Glass UI and deployment assets to openHop.
+
+### Fixes
+
+- Fixed policy editor behavior for HTTP IDs, Repeater-compatible condition fields, rule IDs, object/group references, and sync status formatting.
+- Fixed Proxmox installer prompt validation, non-interactive execution guards, update helper expansion, container startup diagnostics, and default resource sizing.
+- Preserved existing Glass database and Docker volumes across openHop deployment changes.
+
+### Documentation
+
+- Added Repeater policy_sync, sensor telemetry, openHop migration, and expanded project documentation.
+- Updated Repeater terminology and removed stale development wording.
+
 ## [1.0.4] - 2026-04-21
 
 ### Chores
