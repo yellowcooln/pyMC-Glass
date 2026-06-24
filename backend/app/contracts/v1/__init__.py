@@ -1,2 +1,2 @@
-"""Versioned contracts for pyMC_Glass."""
+"""Versioned contracts for openHop Glass."""
 

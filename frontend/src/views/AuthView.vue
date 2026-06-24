@@ -3,7 +3,7 @@
     <UiPanelCard class="auth-card">
       <header>
         <div class="auth-brand">
-          <img class="auth-logo" :src="logoImage" alt="pyMC_Glass logo" />
+          <img class="auth-logo" :src="logoImage" alt="openHop Glass logo" />
         </div>
       </header>
 

@@ -49,7 +49,7 @@ class WebhookNotificationProvider:
                 ),
             )
 
-        headers = {"Content-Type": "application/json", "User-Agent": "pyMC_Glass/alert-actions"}
+        headers = {"Content-Type": "application/json", "User-Agent": "openHop Glass/alert-actions"}
         headers.update(validated.headers)
         request_obj = urllib_request.Request(
             url=str(validated.url),

@@ -26,7 +26,7 @@ class AppriseNotificationProvider:
         supports_send=True,
         supports_templated_payload=True,
     )
-    _USER_AGENT = "pyMC_Glass/alert-actions"
+    _USER_AGENT = "openHop Glass/alert-actions"
 
     def validate_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         validated = AppriseIntegrationSettings.model_validate(settings)

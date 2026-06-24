@@ -11,7 +11,7 @@
     <header class="sidebar-header">
       <router-link class="brand-link" to="/dashboard" @click="emitNavigate">
         <div class="brand-glyph">
-          <img class="brand-logo" :src="logoImage" alt="pyMC_Glass logo" />
+          <img class="brand-logo" :src="logoImage" alt="openHop Glass logo" />
         </div>
       </router-link>
       <div v-if="!mobile" class="sidebar-toggle-row">
@@ -175,7 +175,7 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: "navigate"): void }>();
 const route = useRoute();
 
-const SIDEBAR_EXPANDED_STORAGE_KEY = "pymc_glass_sidebar_expanded";
+const SIDEBAR_EXPANDED_STORAGE_KEY = "openhop_glass_sidebar_expanded";
 const autoCollapseWidth = 1600;
 
 const desktopExpanded = ref(false);

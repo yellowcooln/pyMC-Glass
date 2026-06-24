@@ -50,10 +50,10 @@ import type {
   ManagedMqttSettingsUpdateResponse,
 } from "../types";
 
-const TOKEN_STORAGE_KEY = "pymc_glass_token";
-const USER_STORAGE_KEY = "pymc_glass_user";
-const EXPIRES_AT_STORAGE_KEY = "pymc_glass_expires_at";
-const SETUP_WIZARD_SKIP_KEY = "pymc_glass_setup_wizard_skipped";
+const TOKEN_STORAGE_KEY = "openhop_glass_token";
+const USER_STORAGE_KEY = "openhop_glass_user";
+const EXPIRES_AT_STORAGE_KEY = "openhop_glass_expires_at";
+const SETUP_WIZARD_SKIP_KEY = "openhop_glass_setup_wizard_skipped";
 const MAX_TELEMETRY_EVENTS = 100;
 
 export const appState = reactive({

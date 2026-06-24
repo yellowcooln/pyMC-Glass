@@ -268,7 +268,7 @@ def sync_policy(
             "policy": normalized_policy,
             "mode": payload.mode,
             "validate_only": payload.validate_only,
-            "source": "pyMC Glass",
+            "source": "openHop Glass",
         }
         if template_id:
             command_payload["template_id"] = template_id

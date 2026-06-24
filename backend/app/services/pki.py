@@ -50,7 +50,7 @@ class PkiService:
             subject = x509.Name(
                 [
                     x509.NameAttribute(NameOID.COUNTRY_NAME, "XX"),
-                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, "pyMC_Glass"),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, "openHop Glass"),
                     x509.NameAttribute(NameOID.COMMON_NAME, self._settings.pki_ca_common_name),
                 ]
             )
@@ -213,7 +213,7 @@ class PkiService:
             self._issue_leaf_certificate(
                 key_path=self._mqtt_backend_key_path,
                 cert_path=self._mqtt_backend_cert_path,
-                common_name="pymc-glass-backend",
+                common_name="openhop-glass-backend",
                 ext_key_usages=[ExtendedKeyUsageOID.CLIENT_AUTH],
             )
 

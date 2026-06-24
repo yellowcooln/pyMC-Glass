@@ -1,2 +1,2 @@
-"""pyMC_Glass backend package."""
+"""openHop Glass backend package."""
 

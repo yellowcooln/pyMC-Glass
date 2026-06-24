@@ -46,7 +46,7 @@ import { appState, isAuthenticated } from "./state/appState";
 import SetupWizardModal from "./components/ui/SetupWizardModal.vue";
 import { useTheme } from "./composables/useTheme";
 
-const VERSION_COOKIE_NAME = "pymc_glass_seen_version";
+const VERSION_COOKIE_NAME = "openhop_glass_seen_version";
 const appVersion = ((import.meta.env.VITE_APP_VERSION as string | undefined) ?? "0.1.0").trim();
 const buyMeCoffeeUrl = (
   (import.meta.env.VITE_BUYMEACOFFEE_URL as string | undefined) ??

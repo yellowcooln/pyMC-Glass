@@ -196,7 +196,7 @@ def test_provider_registry_webhook_baseline(client, monkeypatch) -> None:
             "format": "markdown",
             "timeout_seconds": 12,
             "verify_tls": False,
-            "headers": {"X-Source": "pyMC_Glass"},
+            "headers": {"X-Source": "openHop Glass"},
         },
         registry=registry,
     )
@@ -350,7 +350,7 @@ def test_alert_action_integrations_api_crud(client) -> None:
             "settings": {
                 "url": "https://example.com/hooks/ops",
                 "method": "post",
-                "headers": {"X-Source": "pymc-glass"},
+                "headers": {"X-Source": "openhop-glass"},
                 "timeout_seconds": 7,
                 "verify_tls": True,
                 "max_body_bytes": 8192,
@@ -377,7 +377,7 @@ def test_alert_action_integrations_api_crud(client) -> None:
             "settings": {
                 "url": "https://example.com/hooks/ops-v2",
                 "method": "put",
-                "headers": {"X-Source": "pymc-glass-v2"},
+                "headers": {"X-Source": "openhop-glass-v2"},
                 "timeout_seconds": 5,
                 "verify_tls": False,
                 "max_body_bytes": 4096,
@@ -448,7 +448,7 @@ def test_alert_action_integration_test_send_apprise(client, monkeypatch) -> None
                 "format": "markdown",
                 "timeout_seconds": 12,
                 "verify_tls": False,
-                "headers": {"X-Source": "pyMC_Glass"},
+                "headers": {"X-Source": "openHop Glass"},
             },
         },
         headers=headers,

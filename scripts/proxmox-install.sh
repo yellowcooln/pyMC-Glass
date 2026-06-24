@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# pyMC Glass - Proxmox LXC Installer
-# Creates an LXC container and installs pyMC Glass with Docker Compose.
+# openHop Glass - Proxmox LXC Installer
+# Creates an LXC container and installs openHop Glass with Docker Compose.
 #
 # Usage (run on the Proxmox host):
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/pyMC-dev/pyMC-Glass/main/scripts/proxmox-install.sh)"
@@ -18,12 +18,12 @@ CT_RAM=4096
 CT_SWAP=1024
 CT_DISK=10
 CT_CORES=4
-CT_HOSTNAME="pymc-glass"
+CT_HOSTNAME="openhop-glass"
 CT_BRIDGE="vmbr0"
 CT_STORAGE="local-lvm"
 CT_TEMPLATE_STORAGE="local"
-APP_DIR="/opt/pymc-glass"
-APP_ADMIN_EMAIL="admin@pymc.glass"
+APP_DIR="/opt/openhop-glass"
+APP_ADMIN_EMAIL="admin@openhop.glass"
 APP_ADMIN_PASSWORD="admin12345678"
 APP_FRONTEND_PORT=5173
 APP_BACKEND_PORT=8080
@@ -42,7 +42,7 @@ header() {
     clear
     echo -e "${BLD}"
     echo "═══════════════════════════════════════════════════════════════"
-    echo "           pyMC Glass - Proxmox LXC Installer"
+    echo "           openHop Glass - Proxmox LXC Installer"
     echo "═══════════════════════════════════════════════════════════════"
     echo -e "${CL}"
 }
@@ -156,8 +156,8 @@ AVAILABLE_STORAGES=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {prin
 echo "  Available storages: ${AVAILABLE_STORAGES}"
 read -p "  Storage [${CT_STORAGE}]: " -r input; CT_STORAGE="${input:-$CT_STORAGE}"
 read -p "  Git branch [${BRANCH}]: " -r input; BRANCH="${input:-$BRANCH}"
-read -sp "  Root password [pymc-glass]: " CT_PASSWORD; echo
-CT_PASSWORD="${CT_PASSWORD:-pymc-glass}"
+read -sp "  Root password [openhop-glass]: " CT_PASSWORD; echo
+CT_PASSWORD="${CT_PASSWORD:-openhop-glass}"
 
 # ── Confirmation ───────────────────────────────────────────────────────────
 echo ""
@@ -202,7 +202,7 @@ msg_ok "Container created"
 msg_info "Configuring LXC nesting for Docker..."
 cat >> "/etc/pve/lxc/${CTID}.conf" <<'EOF'
 
-# Docker support for pyMC Glass
+# Docker support for openHop Glass
 lxc.apparmor.profile: unconfined
 lxc.cgroup2.devices.allow: a
 lxc.cap.drop:
@@ -266,7 +266,7 @@ AUTOLOGIN
 "
 msg_ok "Container packages installed"
 
-msg_info "Cloning pyMC Glass (branch: ${BRANCH})..."
+msg_info "Cloning openHop Glass (branch: ${BRANCH})..."
 container_bash "
     set -euo pipefail
     rm -rf '${APP_DIR}'
@@ -274,7 +274,7 @@ container_bash "
 "
 msg_ok "Repository cloned"
 
-msg_info "Configuring pyMC Glass environment..."
+msg_info "Configuring openHop Glass environment..."
 POSTGRES_PASSWORD=$(openssl rand -base64 30 | tr -d '=+/[:space:]' | cut -c1-32)
 container_bash "
     set -euo pipefail
@@ -290,14 +290,14 @@ container_bash "
 msg_ok "Environment configured"
 
 msg_info "Installing login banner inside container..."
-container_bash "cat > /etc/profile.d/pymc-glass-motd.sh <<'MOTD'
+container_bash "cat > /etc/profile.d/openhop-glass-motd.sh <<'MOTD'
 #!/bin/sh
 HOSTNAME=\$(hostname)
 IP=\$(hostname -I | awk '{print \$1}')
 OS=\$(. /etc/os-release && echo \"\$NAME\")
 VER=\$(. /etc/os-release && echo \"\$VERSION_ID\")
 echo \"\"
-echo \"    pyMC Glass LXC Container\"
+echo \"    openHop Glass LXC Container\"
 echo \"    🌐  GitHub: https://github.com/pyMC-dev/pyMC-Glass\"
 echo \"\"
 echo \"    🖥️   OS: \$OS - Version: \$VER\"
@@ -311,7 +311,7 @@ echo \"    Management: cd ${APP_DIR} && ${STACK_COMPOSE_CMD} ps\"
 echo \"    Update: update\"
 echo \"\"
 MOTD
-chmod +x /etc/profile.d/pymc-glass-motd.sh"
+chmod +x /etc/profile.d/openhop-glass-motd.sh"
 msg_ok "Login banner installed"
 
 # Pre-seed branch variables so this heredoc is safe under set -u.
@@ -321,21 +321,21 @@ CHOSEN_BRANCH=main
 msg_info "Installing container update helper and command aliases..."
 container_bash "
     mkdir -p /usr/local/bin
-    cat > /usr/local/bin/pymc-glass-update <<'UPDATE'
+    cat > /usr/local/bin/openhop-glass-update <<'UPDATE'
 #!/usr/bin/env bash
 
 set -euo pipefail
 
-APP_DIR='/opt/pymc-glass'
+APP_DIR='/opt/openhop-glass'
 
 if [ ! -d "$APP_DIR" ]; then
-    echo "ERROR: pyMC Glass directory not found at $APP_DIR"
+    echo "ERROR: openHop Glass directory not found at $APP_DIR"
     exit 1
 fi
 
 if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "ERROR: Not a git repository at $APP_DIR"
-    echo "Run this from inside the container where pyMC Glass was installed."
+    echo "Run this from inside the container where openHop Glass was installed."
     exit 1
 fi
 
@@ -364,17 +364,17 @@ ${STACK_COMPOSE_CMD} up -d --build
 
 echo "Updated ${CHOSEN_BRANCH} and restarted services."
 UPDATE
-chmod +x /usr/local/bin/pymc-glass-update
-ln -sf /usr/local/bin/pymc-glass-update /usr/local/bin/update
-cat > /etc/profile.d/pymc-glass-update-alias.sh <<'ALIAS'
-alias update='/usr/local/bin/pymc-glass-update'
-alias pymc-glass-update='/usr/local/bin/pymc-glass-update'
+chmod +x /usr/local/bin/openhop-glass-update
+ln -sf /usr/local/bin/openhop-glass-update /usr/local/bin/update
+cat > /etc/profile.d/openhop-glass-update-alias.sh <<'ALIAS'
+alias update='/usr/local/bin/openhop-glass-update'
+alias openhop-glass-update='/usr/local/bin/openhop-glass-update'
 ALIAS
 "
 msg_ok "Update helper and aliases installed"
 
-# ── Start pyMC Glass ───────────────────────────────────────────────────────
-msg_info "Starting pyMC Glass production stack (this can take several minutes)..."
+# ── Start openHop Glass ───────────────────────────────────────────────────────
+msg_info "Starting openHop Glass production stack (this can take several minutes)..."
 container_bash "
     set -euo pipefail
     cd '${APP_DIR}'
@@ -414,7 +414,7 @@ CT_IP=$(container_exec hostname -I 2>/dev/null | awk '{print $1}')
 echo ""
 echo -e "${BLD}"
 echo "═══════════════════════════════════════════════════════════════"
-echo "          ✓ pyMC Glass Installation Complete!"
+echo "          ✓ openHop Glass Installation Complete!"
 echo "═══════════════════════════════════════════════════════════════"
 echo -e "${CL}"
 echo -e "  Container:       ${GN}${CTID}${CL} (${CT_HOSTNAME})"

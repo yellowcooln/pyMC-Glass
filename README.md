@@ -1,6 +1,6 @@
-# pyMC Glass
+# openHop Glass
 
-pyMC Glass is a web management console for pyMC Repeater fleets. It provides a control plane for repeater adoption, health monitoring, MQTT telemetry ingest, command dispatch, certificate management, policy distribution, alerting, and encrypted config backups.
+openHop Glass is a web management console for openHop Repeater fleets. It provides a control plane for repeater adoption, health monitoring, MQTT telemetry ingest, command dispatch, certificate management, policy distribution, alerting, and encrypted config backups.
 
 The stack is built for self-hosted deployments and runs as Docker Compose services: a FastAPI backend, Vue frontend, Timescale/PostgreSQL database, Mosquitto MQTT broker, and local PKI initializer.
 
@@ -40,7 +40,7 @@ The stack is built for self-hosted deployments and runs as Docker Compose servic
 ## Architecture
 
 ```text
-pyMC Repeater(s)
+openHop Repeater(s)
   |  /inform control loop
   v
 FastAPI backend  <---->  PostgreSQL / TimescaleDB
@@ -103,8 +103,8 @@ For Proxmox LXC installation:
 1. Clone the repository.
 
    ```sh
-   git clone https://github.com/pyMC-dev/pyMC-Glass.git
-   cd pyMC-Glass
+   git clone https://github.com/pyMC-dev/pyMC-Glass.git openHop-Glass
+   cd openHop-Glass
    ```
 
 2. Initialize local environment files.
@@ -134,7 +134,7 @@ For Proxmox LXC installation:
 6. Log in with the seeded development admin account.
 
    ```text
-   Email:    admin@pymc.glass
+   Email:    admin@openhop.glass
    Password: admin12345678
    ```
 
@@ -196,7 +196,7 @@ Production frontend behavior differs from development: `docker-compose.prod.yml`
 
 ## Proxmox LXC installer
 
-pyMC Glass includes an interactive Proxmox installer that creates a Debian 12 LXC container and installs the production Docker Compose stack.
+openHop Glass includes an interactive Proxmox installer that creates a Debian 12 LXC container and installs the production Docker Compose stack.
 
 Run from a Proxmox VE root shell:
 

@@ -22,7 +22,7 @@ class PushoverNotificationProvider:
         supports_templated_payload=True,
     )
     _PUSHOVER_API_URL = "https://api.pushover.net/1/messages.json"
-    _USER_AGENT = "pyMC_Glass/alert-actions"
+    _USER_AGENT = "openHop Glass/alert-actions"
 
     def validate_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         validated = PushoverIntegrationSettings.model_validate(settings)

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make pyMC Repeater dev send sensor and UPS readings to pyMC Glass as soon as the Repeater sensor subsystem has readings.
+Make openHop Repeater dev send sensor and UPS readings to openHop Glass as soon as the Repeater sensor subsystem has readings.
 Glass is already pre-staged to accept a top-level `/inform` field named `sensors` and expose it on the repeater detail API/UI.
 
 ## Current Glass contract

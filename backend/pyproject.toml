@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pymc-glass-backend"
+name = "openhop-glass-backend"
 version = "1.0.4"
-description = "pyMC_Glass backend service"
+description = "openHop Glass backend service"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.116.0",
@@ -28,7 +28,7 @@ dev = [
 ]
 
 [project.scripts]
-pymc-glass-api = "app.main:run"
+openhop-glass-api = "app.main:run"
 
 [tool.setuptools]
 package-dir = {"" = "."}

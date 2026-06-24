@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make pyMC Repeater dev execute the `policy_sync` command queued by pyMC Glass.
+Make openHop Repeater dev execute the `policy_sync` command queued by openHop Glass.
 Glass is already pre-staged to build, validate, store, and queue Repeater Policy Engine templates.
 
 ## Glass command shape
@@ -30,7 +30,7 @@ Glass queues a normal inform-response command:
     },
     "mode": "replace",
     "validate_only": false,
-    "source": "pyMC Glass",
+    "source": "openHop Glass",
     "template_id": "<optional-template-id>"
   }
 }

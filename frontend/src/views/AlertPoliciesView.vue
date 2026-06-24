@@ -2327,7 +2327,7 @@ async function runIntegrationTestAction(integration: AlertActionIntegrationRespo
         integration_id: integration.id,
       },
       rendered_payload: {
-        title: "pyMC_Glass Action Test",
+        title: "openHop Glass Action Test",
         body: "Integration test send from Alert Policies Actions section.",
       },
     });
