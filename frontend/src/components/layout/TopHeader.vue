@@ -1,5 +1,5 @@
 <template>
-  <header class="glass-card flex flex-col items-stretch justify-between gap-3 px-4 py-3 lg:flex-row lg:items-center">
+  <header class="glass-card sticky top-2 z-40 flex flex-col items-stretch justify-between gap-3 px-4 py-3 sm:top-4 lg:flex-row lg:items-center">
     <div class="flex items-center gap-3">
       <button class="btn btn-ghost inline-flex xl:hidden" @click="$emit('toggle-menu')">☰</button>
       <div class="header-brand" aria-label="openHop Glass">

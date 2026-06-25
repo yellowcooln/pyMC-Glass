@@ -655,7 +655,8 @@ export function formatTimestamp(value: string | null): string {
   if (!value) {
     return "—";
   }
-  const date = new Date(value);
+  const normalizedValue = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  const date = new Date(normalizedValue);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
