@@ -1,8 +1,8 @@
-from app.config import get_settings
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from app.config import get_settings
 from app.db.models import Alert, InformSnapshot, Packet, Repeater
 from app.db.session import get_session_factory
 from cryptography import x509
@@ -418,7 +418,10 @@ def test_managed_mqtt_settings_update_and_queue_to_repeaters(client) -> None:
         == "mqtt.internal.example"
     ]
     assert len(managed_commands) == 2
-    assert "mqtt_broker_additional_hosts" not in managed_commands[0]["params"]["config"]["glass_managed"]
+    assert (
+        "mqtt_broker_additional_hosts"
+        not in managed_commands[0]["params"]["config"]["glass_managed"]
+    )
 
 
 def test_repeater_policy_template_validate_and_sync(client) -> None:
@@ -455,20 +458,29 @@ def test_repeater_policy_template_validate_and_sync(client) -> None:
         "rules": [
             {
                 "name": "Drop blocked channel text",
-                "if": {"all": [{"field": "channel_message_body", "op": "contains", "value": "blocked"}]},
+                "if": {
+                    "all": [{"field": "channel_message_body", "op": "contains", "value": "blocked"}]
+                },
                 "then": {"action": "drop"},
             }
         ],
         "objects": {"channel_hash_groups": {"blocked": ["0x12"]}},
     }
-    validation = client.post("/api/repeater-policies/validate", json={"policy": policy}, headers=headers)
+    validation = client.post(
+        "/api/repeater-policies/validate", json={"policy": policy}, headers=headers
+    )
     assert validation.status_code == 200
     assert validation.json()["valid"] is True
     assert validation.json()["normalized_policy"]["rules"][0]["then"]["action"] == "drop"
 
     created = client.post(
         "/api/repeater-policies/templates",
-        json={"name": "Drop blocked", "description": "packet policy", "enabled": True, "policy": policy},
+        json={
+            "name": "Drop blocked",
+            "description": "packet policy",
+            "enabled": True,
+            "policy": policy,
+        },
         headers=headers,
     )
     assert created.status_code == 201

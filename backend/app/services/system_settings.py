@@ -94,9 +94,7 @@ def _sanitize_host_list(raw: Any) -> list[str]:
 
 
 def _load_stored_overrides(db: Session) -> tuple[dict[str, Any], datetime | None]:
-    row = db.scalar(
-        select(SystemSetting).where(SystemSetting.key == MANAGED_MQTT_SETTINGS_KEY)
-    )
+    row = db.scalar(select(SystemSetting).where(SystemSetting.key == MANAGED_MQTT_SETTINGS_KEY))
     if row is None:
         return {}, None
     try:

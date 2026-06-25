@@ -26,6 +26,7 @@ All notable changes to this project are documented in this file.
 ### Chores
 
 - Updated backend and frontend dependencies to current versions and cleared npm audit findings.
+- Cleaned up backend formatting/import ordering so ruff lint passes across app and tests.
 
 ## [1.0.4] - 2026-04-21
 

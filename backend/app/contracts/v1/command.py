@@ -45,4 +45,3 @@ class CommandResultV1(BaseModel):
     status: str = Field(min_length=1, max_length=32)
     message: Optional[str] = Field(default=None, max_length=1024)
     completed_at: datetime
-

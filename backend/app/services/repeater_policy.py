@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
-
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -60,7 +59,9 @@ def mark_repeater_policy_sync_dispatched(
     repeater_id: str,
     command_id: str,
 ) -> None:
-    row = db.scalar(select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id))
+    row = db.scalar(
+        select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id)
+    )
     if row is None:
         row = RepeaterPolicySyncStatus(repeater_id=repeater_id)
         db.add(row)
@@ -80,7 +81,9 @@ def mark_repeater_policy_sync_result(
     message: str | None,
     completed_at: datetime | None,
 ) -> None:
-    row = db.scalar(select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id))
+    row = db.scalar(
+        select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater_id)
+    )
     if row is None:
         row = RepeaterPolicySyncStatus(repeater_id=repeater_id)
         db.add(row)

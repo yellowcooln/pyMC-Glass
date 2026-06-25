@@ -5,9 +5,9 @@ from fastapi import FastAPI
 
 from app.api.routes.adoption import router as adoption_router
 from app.api.routes.alert_actions import router as alert_actions_router
-from app.api.routes.alerts import router as alerts_router
 from app.api.routes.alert_policy import groups_router as node_groups_router
 from app.api.routes.alert_policy import router as alert_policy_router
+from app.api.routes.alerts import router as alerts_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.bootstrap import router as bootstrap_router
@@ -18,8 +18,8 @@ from app.api.routes.health import router as health_router
 from app.api.routes.inform import router as inform_router
 from app.api.routes.insights import router as insights_router
 from app.api.routes.packets import router as packets_router
-from app.api.routes.repeaters import router as repeaters_router
 from app.api.routes.repeater_policy import router as repeater_policy_router
+from app.api.routes.repeaters import router as repeaters_router
 from app.api.routes.smoke import router as smoke_router
 from app.api.routes.system_settings import router as system_settings_router
 from app.api.routes.telemetry import router as telemetry_router
@@ -28,8 +28,8 @@ from app.api.routes.users import router as users_router
 from app.config import get_settings
 from app.db.migrate import apply_migrations
 from app.db.session import get_engine, get_session_factory
-from app.services.alert_actions import get_notification_provider_registry
 from app.services.alert_action_dispatcher import AlertActionDispatcherService
+from app.services.alert_actions import get_notification_provider_registry
 from app.services.alert_policy_monitor import AlertPolicyMonitorService
 from app.services.bootstrap_seed import seed_default_admin_if_needed
 from app.services.mqtt_ingest import MqttIngestService
@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title=settings.app_name,
-        version = "1.1.0",
+        version="1.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,
@@ -137,4 +137,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-

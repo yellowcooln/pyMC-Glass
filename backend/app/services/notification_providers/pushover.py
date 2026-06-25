@@ -1,6 +1,6 @@
 from __future__ import annotations
-import json
 
+import json
 from typing import Any
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -163,6 +163,8 @@ class PushoverNotificationProvider:
                 error=f"Pushover request failed with HTTP {exc.code}",
             )
         except urllib_error.URLError as exc:
-            return NotificationSendResult(status="failed", error=f"Pushover request failed: {exc.reason}")
+            return NotificationSendResult(
+                status="failed", error=f"Pushover request failed: {exc.reason}"
+            )
         except TimeoutError:
             return NotificationSendResult(status="failed", error="Pushover request timed out")

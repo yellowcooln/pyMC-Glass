@@ -1,2 +1,1 @@
 """openHop Glass backend package."""
-

@@ -46,6 +46,7 @@ class InformSnapshotPointResponse(BaseModel):
     dropped: int | None = None
     airtime_percent: float | None = None
 
+
 class RepeaterCertDiagnosticLogResponse(BaseModel):
     timestamp: datetime
     severity: str
@@ -66,4 +67,3 @@ class RepeaterDetailResponse(RepeaterResponse):
 
 class DeleteStaleRepeatersResponse(BaseModel):
     removed: int
-

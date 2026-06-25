@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
 from app.db.models import ConfigSnapshot
 from app.db.session import get_session_factory
+from sqlalchemy import select
 
 
 def _bootstrap_admin(client) -> None:
@@ -338,7 +338,11 @@ def test_policy_sync_updates_runtime_policy_status(client) -> None:
     assert template.status_code == 201
     sync = client.post(
         "/api/repeater-policies/sync",
-        json={"template_id": template.json()["id"], "repeater_ids": [repeater_id], "mode": "replace"},
+        json={
+            "template_id": template.json()["id"],
+            "repeater_ids": [repeater_id],
+            "mode": "replace",
+        },
         headers=headers,
     )
     assert sync.status_code == 200
@@ -619,9 +623,9 @@ def test_config_snapshot_export_ingest_encrypted_and_rotates(client) -> None:
                 "command_id": command_id,
                 "status": "success",
                 "message": "config exported",
-                "completed_at": (
-                    datetime.now(UTC) + timedelta(seconds=idx)
-                ).isoformat().replace("+00:00", "Z"),
+                "completed_at": (datetime.now(UTC) + timedelta(seconds=idx))
+                .isoformat()
+                .replace("+00:00", "Z"),
                 "details": {
                     "config": {
                         "repeater": {"node_name": node_name},
@@ -760,8 +764,7 @@ def test_config_snapshot_request_logs_and_change_control_dedup(client) -> None:
     assert detail.status_code == 200
     diagnostics = detail.json().get("cert_diagnostics", [])
     assert any(
-        entry.get("source") == "config_snapshot_request"
-        and reason in str(entry.get("message", ""))
+        entry.get("source") == "config_snapshot_request" and reason in str(entry.get("message", ""))
         for entry in diagnostics
     )
     assert any(

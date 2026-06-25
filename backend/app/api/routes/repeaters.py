@@ -34,6 +34,7 @@ router = APIRouter(prefix="/api/repeaters")
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
+
 def _ensure_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -58,9 +59,11 @@ def _parse_json(value: str | None) -> dict[str, Any] | None:
         return None
     return parsed if isinstance(parsed, dict) else None
 
+
 def _parse_json_object(value: str | None) -> dict[str, Any]:
     parsed = _parse_json(value)
     return parsed or {}
+
 
 def _settings_expect_mqtt_tls(settings: dict[str, Any] | None) -> bool:
     if not settings:
@@ -74,8 +77,10 @@ def _settings_expect_mqtt_tls(settings: dict[str, Any] | None) -> bool:
     mqtt_settings = settings.get("mqtt")
     if isinstance(mqtt_settings, dict):
         tls = mqtt_settings.get("tls")
-        if bool(mqtt_settings.get("enabled")) and isinstance(tls, dict) and bool(
-            tls.get("enabled")
+        if (
+            bool(mqtt_settings.get("enabled"))
+            and isinstance(tls, dict)
+            and bool(tls.get("enabled"))
         ):
             return True
     return False

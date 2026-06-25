@@ -11,8 +11,8 @@ from app.config import get_settings
 from app.contracts.v1.inform import InformRequestV1
 from app.db.models import Certificate, CommandQueueItem, InformSnapshot, Repeater
 from app.db.session import get_db_session
-from app.services.audit import write_audit_log
 from app.services.alert_policy import evaluate_policies_for_repeater
+from app.services.audit import write_audit_log
 from app.services.config_snapshot import (
     ConfigSnapshotService,
     SnapshotEncryptionError,

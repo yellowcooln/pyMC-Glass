@@ -84,7 +84,9 @@ def list_templates(
     db: Session = Depends(get_db_session),
     _: User = Depends(require_roles("admin", "operator", "viewer")),
 ) -> list[RepeaterPolicyTemplateResponse]:
-    templates = db.scalars(select(RepeaterPolicyTemplate).order_by(RepeaterPolicyTemplate.name.asc())).all()
+    templates = db.scalars(
+        select(RepeaterPolicyTemplate).order_by(RepeaterPolicyTemplate.name.asc())
+    ).all()
     return [_to_template_response(template) for template in templates]
 
 
@@ -101,7 +103,9 @@ def create_template(
     try:
         normalized_policy = normalize_policy_document(payload.policy)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     template = RepeaterPolicyTemplate(
         name=payload.name.strip(),
@@ -138,16 +142,22 @@ def update_template(
     db: Session = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> RepeaterPolicyTemplateResponse:
-    template = db.scalar(select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == template_id))
+    template = db.scalar(
+        select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == template_id)
+    )
     if template is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found"
+        )
 
     changes = payload.model_dump(exclude_unset=True)
     if "policy" in changes and changes["policy"] is not None:
         try:
             changes["policy"] = normalize_policy_document(changes["policy"])
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
 
     if "name" in changes and changes["name"] is not None:
         template.name = str(changes["name"]).strip()
@@ -185,9 +195,13 @@ def delete_template(
     db: Session = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> None:
-    template = db.scalar(select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == template_id))
+    template = db.scalar(
+        select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == template_id)
+    )
     if template is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found"
+        )
     template_name = template.name
     db.delete(template)
     write_audit_log(
@@ -237,11 +251,17 @@ def sync_policy(
 ) -> RepeaterPolicySyncResponse:
     template_id: str | None = None
     if payload.template_id:
-        template = db.scalar(select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == payload.template_id))
+        template = db.scalar(
+            select(RepeaterPolicyTemplate).where(RepeaterPolicyTemplate.id == payload.template_id)
+        )
         if template is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Repeater policy template not found"
+            )
         if template.enabled != 1:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Repeater policy template is disabled")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Repeater policy template is disabled"
+            )
         policy = _load_policy_json(template)
         template_id = template.id
     else:
@@ -250,14 +270,18 @@ def sync_policy(
     try:
         normalized_policy = normalize_policy_document(policy)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     repeaters_query = select(Repeater).where(~Repeater.status.in_(["pending_adoption", "rejected"]))
     if not payload.all_repeaters:
         repeaters_query = repeaters_query.where(Repeater.id.in_(payload.repeater_ids))
     repeaters = db.scalars(repeaters_query.order_by(Repeater.node_name.asc())).all()
     if not repeaters:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No eligible repeaters found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No eligible repeaters found"
+        )
 
     now = _utc_now()
     payload_hash = policy_payload_hash(normalized_policy)
@@ -284,7 +308,9 @@ def sync_policy(
         command_ids.append(command.id)
 
         sync_status = db.scalar(
-            select(RepeaterPolicySyncStatus).where(RepeaterPolicySyncStatus.repeater_id == repeater.id)
+            select(RepeaterPolicySyncStatus).where(
+                RepeaterPolicySyncStatus.repeater_id == repeater.id
+            )
         )
         if sync_status is None:
             sync_status = RepeaterPolicySyncStatus(repeater_id=repeater.id)

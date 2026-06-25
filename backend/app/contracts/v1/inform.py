@@ -101,4 +101,3 @@ InformResponseV1 = Union[
     InformCertRenewalResponseV1,
     InformUpgradeResponseV1,
 ]
-

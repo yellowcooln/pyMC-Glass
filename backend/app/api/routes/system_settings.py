@@ -2,14 +2,14 @@ import json
 import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
 from cryptography.fernet import Fernet
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db.models import CommandQueueItem, Repeater, User
 from app.db.session import get_db_session
-from app.config import get_settings
 from app.schemas.system_settings import (
     ConfigSnapshotEncryptionKeyGenerateRequest,
     ConfigSnapshotEncryptionKeyGenerateResponse,
@@ -21,6 +21,7 @@ from app.schemas.system_settings import (
 )
 from app.security.deps import require_roles
 from app.services.audit import write_audit_log
+from app.services.pki import PkiService
 from app.services.system_settings import (
     get_effective_config_snapshot_encryption_keys,
     get_effective_managed_mqtt_settings,
@@ -29,7 +30,6 @@ from app.services.system_settings import (
     save_config_snapshot_encryption_keys,
     save_managed_mqtt_settings,
 )
-from app.services.pki import PkiService
 
 router = APIRouter(prefix="/api/system-settings")
 _KEY_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")

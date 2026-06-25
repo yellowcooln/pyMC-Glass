@@ -94,4 +94,3 @@ def reject_repeater(
         node_name=repeater.node_name,
         status=repeater.status,
     )
-
