@@ -8,6 +8,7 @@ services:
       - ./backend/.env
     command: ["python", "-m", "app.scripts.pki_init"]
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./pki:/app/data/pki
   postgres:
     image: timescale/timescaledb:latest-pg16
@@ -20,6 +21,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
@@ -36,6 +38,8 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     command:
       - sh
       - -c
@@ -57,6 +61,7 @@ services:
     ports:
       - "8883:8883"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./pki:/mosquitto/pki:ro
       - mosquitto_data:/mosquitto/data
@@ -84,6 +89,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./pki:/app/data/pki
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
@@ -101,6 +107,7 @@ services:
       VITE_API_PROXY_TARGET: http://backend:8080
       VITE_API_BASE_URL: ""
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./frontend:/app
     ports:
       - "5173:5173"

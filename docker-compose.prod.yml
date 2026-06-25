@@ -21,7 +21,8 @@ services:
       dockerfile: Dockerfile.prod
     ports: !override
       - "5173:80"
-    volumes: !override []
+    volumes: !override
+      - /etc/localtime:/etc/localtime:ro
     environment: !override {}
     working_dir: /usr/share/nginx/html
     command: ["nginx", "-g", "daemon off;"]

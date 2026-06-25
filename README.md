@@ -194,6 +194,21 @@ make easy-start
 
 Production frontend behavior differs from development: `docker-compose.prod.yml` builds the Vite app and serves the static `dist/` bundle with nginx on port `5173`.
 
+### Docker container timezone
+
+The Compose stack bind-mounts the host `/etc/localtime` into each service so container-level clocks match the host timezone. This is especially important for the frontend container: the development image is based on `node:22-alpine`, where setting `TZ=America/New_York` by itself is not enough because the image does not include the named timezone database.
+
+After changing host timezone settings or updating Compose, recreate the stack and verify each container clock:
+
+```sh
+docker compose down
+docker compose up -d --build
+docker compose exec backend date
+docker compose exec frontend date
+docker compose exec postgres date
+docker compose exec mosquitto date
+```
+
 ## Proxmox LXC installer
 
 openHop Glass includes an interactive Proxmox installer that creates a Debian 12 LXC container and installs the production Docker Compose stack.
