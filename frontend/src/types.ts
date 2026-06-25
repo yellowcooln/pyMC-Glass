@@ -59,6 +59,7 @@ export interface RepeaterResponse {
   location: string | null;
   config_hash: string | null;
   inform_ip: string | null;
+  open_url: string | null;
   last_inform_at: string | null;
   created_at: string;
   updated_at: string;
@@ -76,6 +77,7 @@ export interface RepeaterUpdateRequest {
   status?: string;
   firmware_version?: string;
   location?: string;
+  open_url?: string | null;
   config_hash?: string;
 }
 

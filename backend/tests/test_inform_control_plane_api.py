@@ -1,5 +1,8 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from typing import Any, cast
 
+from app.api.routes.inform import _inform_source_ip
 from app.db.models import ConfigSnapshot
 from app.db.session import get_session_factory
 from sqlalchemy import select
@@ -60,6 +63,56 @@ def _inform_payload(node_name: str) -> dict:
         },
         "command_results": [],
     }
+
+
+def test_inform_source_ip_preserves_good_ip_when_docker_gateway_reports() -> None:
+    docker_gateway_request = cast(
+        Any,
+        SimpleNamespace(client=SimpleNamespace(host="172.18.0.1")),
+    )
+    real_lan_request = cast(Any, SimpleNamespace(client=SimpleNamespace(host="192.168.20.42")))
+
+    assert _inform_source_ip(docker_gateway_request, "192.168.20.10") == "192.168.20.10"
+    assert _inform_source_ip(docker_gateway_request, None) == "172.18.0.1"
+    assert _inform_source_ip(real_lan_request, "172.18.0.1") == "192.168.20.42"
+
+
+def test_repeater_open_url_override_is_separate_from_inform_ip(client) -> None:
+    _bootstrap_admin(client)
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = _inform_payload("YC-Work-Repeater")
+    first_inform = client.post("/inform", json=payload)
+    assert first_inform.status_code == 200
+
+    pending = client.get("/api/adoption/pending", headers=headers)
+    assert pending.status_code == 200
+    repeater = pending.json()[0]
+    original_inform_ip = repeater["inform_ip"]
+
+    updated = client.patch(
+        f"/api/repeaters/{repeater['id']}",
+        json={"open_url": " 100.64.12.34:8000 "},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["open_url"] == "100.64.12.34:8000"
+    assert updated.json()["inform_ip"] == original_inform_ip
+
+    detail = client.get(f"/api/repeaters/{repeater['id']}/detail", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["open_url"] == "100.64.12.34:8000"
+    assert detail.json()["inform_ip"] == original_inform_ip
+
+    cleared = client.patch(
+        f"/api/repeaters/{repeater['id']}",
+        json={"open_url": ""},
+        headers=headers,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["open_url"] is None
+    assert cleared.json()["inform_ip"] == original_inform_ip
 
 
 def test_inform_persists_location_and_settings_for_detail(client) -> None:

@@ -353,6 +353,7 @@ def _to_response(repeater: Repeater) -> RepeaterResponse:
         location=repeater.location,
         config_hash=repeater.config_hash,
         inform_ip=repeater.inform_ip,
+        open_url=repeater.open_url,
         last_inform_at=repeater.last_inform_at,
         created_at=repeater.created_at,
         updated_at=repeater.updated_at,
@@ -392,6 +393,7 @@ def _to_detail_response(
         location=repeater.location,
         config_hash=repeater.config_hash,
         inform_ip=repeater.inform_ip,
+        open_url=repeater.open_url,
         last_inform_at=repeater.last_inform_at,
         created_at=repeater.created_at,
         updated_at=repeater.updated_at,
@@ -549,6 +551,9 @@ def update_repeater(
         )
 
     changes = payload.model_dump(exclude_none=True)
+    if "open_url" in payload.model_fields_set:
+        open_url = payload.open_url.strip() if isinstance(payload.open_url, str) else None
+        changes["open_url"] = open_url or None
     for key, value in changes.items():
         setattr(repeater, key, value)
 

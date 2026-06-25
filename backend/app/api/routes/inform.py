@@ -47,6 +47,26 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
+def _is_docker_bridge_gateway(host: str | None) -> bool:
+    if not host:
+        return False
+    parts = host.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        octets = [int(part) for part in parts]
+    except ValueError:
+        return False
+    return octets[0] == 172 and 16 <= octets[1] <= 31 and octets[2:] == [0, 1]
+
+
+def _inform_source_ip(request: Request, current_ip: str | None = None) -> str | None:
+    source_ip = request.client.host if request.client else None
+    if _is_docker_bridge_gateway(source_ip) and current_ip and not _is_docker_bridge_gateway(current_ip):
+        return current_ip
+    return source_ip or current_ip
+
+
 def _compact_json(value: dict[str, Any]) -> str | None:
     if not value:
         return None
@@ -256,7 +276,7 @@ def inform(
             state=payload.state,
             location=location,
             config_hash=payload.config_hash,
-            inform_ip=request.client.host if request.client else None,
+            inform_ip=_inform_source_ip(request),
             last_inform_at=now,
             cert_expires_at=_normalize_datetime(payload.cert_expires_at),
             system_json=_compact_json(system_payload),
@@ -282,7 +302,7 @@ def inform(
         if location is not None:
             repeater.location = location
         repeater.config_hash = payload.config_hash
-        repeater.inform_ip = request.client.host if request.client else repeater.inform_ip
+        repeater.inform_ip = _inform_source_ip(request, repeater.inform_ip)
         repeater.last_inform_at = now
         repeater.system_json = _compact_json(system_payload)
         repeater.radio_json = _compact_json(payload.radio.model_dump())

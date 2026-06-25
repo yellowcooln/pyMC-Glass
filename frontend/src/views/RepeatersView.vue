@@ -169,6 +169,7 @@ import UiDataTable from "../components/ui/UiDataTable.vue";
 
 import StatusPill from "../components/ui/StatusPill.vue";
 import { COMMAND_ACTIONS, type CommandAction, type RepeaterResponse } from "../types";
+import { repeaterUiUrl } from "../utils/repeaterUi";
 import {
   appState,
   canOperate,
@@ -245,11 +246,6 @@ function hasInformWarning(lastInformAt: string | null): boolean {
 
 function isConnectedButSilent(status: string, lastInformAt: string | null): boolean {
   return status === "connected" && hasInformWarning(lastInformAt);
-}
-
-function repeaterUiUrl(repeater: RepeaterResponse): string {
-  const host = repeater.inform_ip || window.location.hostname;
-  return `${window.location.protocol}//${host}`;
 }
 
 function openRepeaterUi(repeater: RepeaterResponse): void {

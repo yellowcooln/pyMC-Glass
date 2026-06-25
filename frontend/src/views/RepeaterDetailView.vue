@@ -59,6 +59,41 @@
         />
       </section>
 
+      <article class="glass-card panel">
+        <h2>Open Repeater Button</h2>
+        <p class="section-subtitle">
+          This only changes the browser URL used by the Open Repeater button. It does not change
+          the inform/control IP that Glass uses to receive heartbeats or queue commands.
+        </p>
+        <form class="panel-form" @submit.prevent="saveOpenUrlOverride">
+          <label class="field-label">
+            Open URL override
+            <input
+              v-model.trim="openUrlForm"
+              class="field"
+              :disabled="!canOperate || openUrlSaving"
+              placeholder="100.x.y.z:8000 or http://yc-work-repeater:8000"
+            />
+          </label>
+          <p class="section-subtitle">
+            Current button target: <code>{{ currentOpenRepeaterUrl }}</code>
+          </p>
+          <div class="inline-controls">
+            <button class="btn btn-primary" :disabled="!canOperate || openUrlSaving">
+              {{ openUrlSaving ? "Saving..." : "Save Open URL" }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              :disabled="!canOperate || openUrlSaving || !detail.open_url"
+              @click="clearOpenUrlOverride"
+            >
+              Clear override
+            </button>
+          </div>
+        </form>
+      </article>
+
       <section class="grid-3">
         <article class="glass-card panel">
           <h2>Noise Floor Trend</h2>
@@ -310,6 +345,7 @@ import {
   listConfigSnapshots,
   queueCommand,
   queueConfigSnapshotExport,
+  updateRepeater,
 } from "../api";
 import {
   appState,
@@ -325,6 +361,7 @@ import type {
   RepeaterCertDiagnosticLogResponse,
   RepeaterDetailResponse,
 } from "../types";
+import { repeaterUiUrl } from "../utils/repeaterUi";
 
 interface SeriesPoint {
   timestamp: string;
@@ -380,6 +417,8 @@ const expandedDiagnosticRows = ref<string[]>([]);
 const snapshotLoading = ref(false);
 const snapshotQueueLoading = ref(false);
 const transportKeysLoading = ref(false);
+const openUrlSaving = ref(false);
+const openUrlForm = ref("");
 const snapshotErrorMessage = ref<string | null>(null);
 const configSnapshots = ref<ConfigSnapshotResponse[]>([]);
 const expandedSnapshotRows = ref<string[]>([]);
@@ -404,6 +443,7 @@ const certDiagnostics = computed<RepeaterCertDiagnosticLogResponse[]>(
   () => detail.value?.cert_diagnostics || [],
 );
 const latestSnapshotKeyId = computed(() => configSnapshots.value[0]?.encryption_key_id || null);
+const currentOpenRepeaterUrl = computed(() => (detail.value ? repeaterUiUrl(detail.value) : "—"));
 
 const latestLivePayloadText = computed(() => {
   if (!latestLiveEvent.value) {
@@ -531,6 +571,7 @@ async function loadDetail(): Promise<void> {
       snapshot_limit: 360,
       cert_log_limit: 40,
     });
+    openUrlForm.value = detail.value.open_url || "";
     expandedDiagnosticRows.value = [];
     await loadConfigSnapshots(detail.value.id);
   } catch (error) {
@@ -542,6 +583,32 @@ async function loadDetail(): Promise<void> {
   } finally {
     loading.value = false;
   }
+}
+
+async function saveOpenUrlOverride(): Promise<void> {
+  if (!appState.token || !detail.value || !canOperate.value) {
+    return;
+  }
+  openUrlSaving.value = true;
+  try {
+    const openUrl = openUrlForm.value.trim() || null;
+    const updated = await updateRepeater(appState.token, detail.value.id, { open_url: openUrl });
+    detail.value = { ...detail.value, ...updated };
+    appState.repeaters = appState.repeaters.map((repeater) =>
+      repeater.id === updated.id ? { ...repeater, ...updated } : repeater,
+    );
+    openUrlForm.value = detail.value.open_url || "";
+    showSuccessToast(openUrl ? "Open Repeater URL saved." : "Open Repeater URL override cleared.");
+  } catch (error) {
+    showErrorToast(error);
+  } finally {
+    openUrlSaving.value = false;
+  }
+}
+
+async function clearOpenUrlOverride(): Promise<void> {
+  openUrlForm.value = "";
+  await saveOpenUrlOverride();
 }
 
 async function queueCertRenewal(): Promise<void> {
@@ -673,14 +740,9 @@ async function queueConfigSnapshotBackup(): Promise<void> {
   }
 }
 
-function repeaterUiUrl(): string {
-  const host = detail.value?.inform_ip || window.location.hostname;
-  return `${window.location.protocol}//${host}`;
-}
-
 function openRepeaterUi(): void {
   if (!detail.value) return;
-  window.open(repeaterUiUrl(), "_blank", "noopener,noreferrer");
+  window.open(repeaterUiUrl(detail.value), "_blank", "noopener,noreferrer");
 }
 
 async function queueTransportKeySync(): Promise<void> {

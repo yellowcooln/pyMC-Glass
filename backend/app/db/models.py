@@ -68,6 +68,7 @@ class Repeater(Base):
         nullable=True,
     )
     inform_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    open_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     config_hash: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     cert_serial: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     cert_expires_at: Mapped[Optional[datetime]] = mapped_column(
