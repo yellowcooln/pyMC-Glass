@@ -9,6 +9,9 @@
       </div>
       <div class="header-actions">
         <router-link to="/repeaters" class="btn btn-secondary">Back to inventory</router-link>
+        <button class="btn btn-secondary" :disabled="!detail" @click="openRepeaterUi">
+          Open Repeater
+        </button>
         <button
           class="btn btn-primary"
           :disabled="loading || renewCertLoading || !canOperate"
@@ -22,6 +25,13 @@
           @click="queueConfigSnapshotBackup"
         >
           {{ snapshotQueueLoading ? "Queueing backup..." : "Queue Config Backup" }}
+        </button>
+        <button
+          class="btn btn-secondary"
+          :disabled="loading || transportKeysLoading || !detail || !canOperate"
+          @click="queueTransportKeySync"
+        >
+          {{ transportKeysLoading ? "Queueing keys..." : "Sync Transport Keys" }}
         </button>
         <button class="btn btn-secondary" :disabled="loading" @click="loadDetail()">
           {{ loading ? "Loading..." : "Refresh detail" }}
@@ -369,6 +379,7 @@ const renewCertLoading = ref(false);
 const expandedDiagnosticRows = ref<string[]>([]);
 const snapshotLoading = ref(false);
 const snapshotQueueLoading = ref(false);
+const transportKeysLoading = ref(false);
 const snapshotErrorMessage = ref<string | null>(null);
 const configSnapshots = ref<ConfigSnapshotResponse[]>([]);
 const expandedSnapshotRows = ref<string[]>([]);
@@ -659,6 +670,37 @@ async function queueConfigSnapshotBackup(): Promise<void> {
     showErrorToast(error);
   } finally {
     snapshotQueueLoading.value = false;
+  }
+}
+
+function repeaterUiUrl(): string {
+  const host = detail.value?.inform_ip || window.location.hostname;
+  return `${window.location.protocol}//${host}`;
+}
+
+function openRepeaterUi(): void {
+  if (!detail.value) return;
+  window.open(repeaterUiUrl(), "_blank", "noopener,noreferrer");
+}
+
+async function queueTransportKeySync(): Promise<void> {
+  if (!appState.token || !detail.value || !canOperate.value) {
+    return;
+  }
+  transportKeysLoading.value = true;
+  try {
+    await queueCommand(appState.token, {
+      node_name: detail.value.node_name,
+      action: "transport_keys_sync",
+      params: {},
+      requested_by: appState.user?.email || "operator",
+      reason: "Manual transport key sync requested from repeater detail view",
+    });
+    showSuccessToast("Transport key sync command queued for this repeater.");
+  } catch (error) {
+    showErrorToast(error);
+  } finally {
+    transportKeysLoading.value = false;
   }
 }
 

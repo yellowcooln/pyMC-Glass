@@ -84,6 +84,20 @@
           </div>
         </form>
       </UiPanelCard>
+
+      <UiPanelCard title="Example Templates" subtitle="Start from common repeater alert/policy patterns, then customize before saving.">
+        <div class="example-template-list">
+          <button
+            v-for="example in EXAMPLE_POLICIES"
+            :key="example.name"
+            class="btn btn-secondary"
+            type="button"
+            @click="applyExamplePolicy(example)"
+          >
+            {{ example.name }}
+          </button>
+        </div>
+      </UiPanelCard>
     </section>
 
     <UiPanelCard title="Policy Engine Editor" subtitle="Form editor for the repeater policy_engine object. JSON mode is still available for advanced fields.">
@@ -488,6 +502,89 @@ const DEFAULT_POLICY = {
   },
 };
 
+const EXAMPLE_POLICIES = [
+  {
+    name: "Log High Airtime",
+    description: "Log packets when airtime/utilization is high so operators can tune busy links.",
+    policy: {
+      enabled: true,
+      default_action: "allow",
+      rules: [
+        {
+          id: "log-high-airtime",
+          name: "Log high airtime",
+          enabled: true,
+          if: {
+            any: [
+              { field: "airtime_percent", op: "greater_or_equal", value: 80 },
+              { field: "utilization_percent", op: "greater_or_equal", value: 80 },
+            ],
+          },
+          then: { action: "log_only" },
+        },
+      ],
+      objects: {
+        channel_hash_groups: {},
+        pubkey_groups: {},
+      },
+    },
+  },
+  {
+    name: "Drop Noisy Low Signal",
+    description: "Drop packets with very weak RSSI and low SNR while allowing normal traffic.",
+    policy: {
+      enabled: true,
+      default_action: "allow",
+      rules: [
+        {
+          id: "drop-noisy-low-signal",
+          name: "Drop noisy low signal",
+          enabled: true,
+          if: {
+            all: [
+              { field: "rssi", op: "less_or_equal", value: -120 },
+              { field: "snr", op: "less_or_equal", value: -12 },
+            ],
+          },
+          then: { action: "drop" },
+        },
+      ],
+      objects: {
+        channel_hash_groups: {},
+        pubkey_groups: {},
+      },
+    },
+  },
+  {
+    name: "Allow Known Pubkey Group",
+    description: "Example group-backed allow list for trusted node public keys.",
+    policy: {
+      enabled: true,
+      default_action: "log_only",
+      rules: [
+        {
+          id: "allow-known-pubkeys",
+          name: "Allow known pubkeys",
+          enabled: true,
+          if: {
+            any: [
+              { field: "sender_pubkey", op: "in", value: "@pubkey_groups.trusted_nodes" },
+              { field: "author_pubkey", op: "in", value: "@pubkey_groups.trusted_nodes" },
+            ],
+          },
+          then: { action: "allow" },
+        },
+      ],
+      objects: {
+        channel_hash_groups: {},
+        pubkey_groups: {
+          trusted_nodes: ["replace-with-node-public-key"],
+        },
+      },
+    },
+  },
+];
+
 const fieldOptions = [
   { value: "route_type", label: "Route Type" },
   { value: "payload_type", label: "Payload Type" },
@@ -496,6 +593,10 @@ const fieldOptions = [
   { value: "hop_count", label: "Hop Count" },
   { value: "rssi", label: "RSSI" },
   { value: "snr", label: "SNR" },
+  { value: "airtime_percent", label: "Airtime Percent" },
+  { value: "utilization_percent", label: "Utilization Percent" },
+  { value: "sender_pubkey", label: "Sender Pubkey" },
+  { value: "author_pubkey", label: "Author Pubkey" },
   { value: "mode", label: "Mode" },
   { value: "local_transmission", label: "Local Transmission" },
   { value: "path_hashes", label: "Path Hashes" },
@@ -613,6 +714,19 @@ function selectTemplate(template: RepeaterPolicyTemplateResponse): void {
   syncForm.templateId = template.id;
   validation.value = null;
   loadBuilderFromJson({ silent: true });
+}
+
+function applyExamplePolicy(example: (typeof EXAMPLE_POLICIES)[number]): void {
+  selectedTemplate.value = null;
+  form.name = example.name;
+  form.description = example.description;
+  form.enabled = true;
+  form.policyJson = JSON.stringify(example.policy, null, 2);
+  syncForm.templateId = "";
+  validation.value = null;
+  editorMode.value = "builder";
+  loadBuilderFromJson({ silent: true });
+  showSuccessToast(`Loaded example template: ${example.name}`);
 }
 
 function switchEditorMode(mode: EditorMode): void {
@@ -1099,6 +1213,12 @@ function formatCommandId(commandId: string | null): string {
 
 .toggle-row.compact {
   margin: 0;
+}
+
+.example-template-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .sync-status-table {

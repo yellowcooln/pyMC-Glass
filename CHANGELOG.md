@@ -1,5 +1,20 @@
 # Changelog
 All notable changes to this project are documented in this file.
+
+## [Unreleased]
+
+### Features
+
+- Added repeater UI launch buttons that open the repeater web interface from the repeater inform IP, falling back to the Glass connection host.
+- Added command queue checkbox targeting for selected repeaters, plus all-repeaters queueing from the command page.
+- Added example repeater policy templates for high airtime logging, low-signal dropping, and trusted pubkey allow-list patterns.
+- Added a single-repeater transport key sync action from the repeater detail page.
+
+### Fixes
+
+- Switched the Network map base layer to the standard OpenStreetMap tile layer so map tiles render behind repeater markers.
+- Exposed repeater inform IP addresses through the API so Glass can link to repeater-local web interfaces.
+
 ## [1.1.0] - 2026-06-24
 
 ### Features

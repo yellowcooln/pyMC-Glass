@@ -28,6 +28,7 @@ class RepeaterResponse(BaseModel):
     firmware_version: str | None = None
     location: str | None = None
     config_hash: str | None = None
+    inform_ip: str | None = None
     last_inform_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

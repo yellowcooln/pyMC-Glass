@@ -58,6 +58,7 @@ export interface RepeaterResponse {
   firmware_version: string | null;
   location: string | null;
   config_hash: string | null;
+  inform_ip: string | null;
   last_inform_at: string | null;
   created_at: string;
   updated_at: string;
@@ -137,7 +138,8 @@ export type CommandAction =
   | "export_config"
   | "export_identity"
   | "run_diagnostic"
-  | "transport_keys_sync";
+  | "transport_keys_sync"
+  | "policy_sync";
 
 export const COMMAND_ACTIONS: CommandAction[] = [
   "restart_service",
@@ -153,6 +155,7 @@ export const COMMAND_ACTIONS: CommandAction[] = [
   "export_identity",
   "run_diagnostic",
   "transport_keys_sync",
+  "policy_sync",
 ];
 
 export interface QueueCommandRequest {
