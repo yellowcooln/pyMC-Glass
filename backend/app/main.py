@@ -35,6 +35,7 @@ from app.services.alert_action_dispatcher import AlertActionDispatcherService
 from app.services.alert_actions import get_notification_provider_registry
 from app.services.alert_policy_monitor import AlertPolicyMonitorService
 from app.services.bootstrap_seed import seed_default_admin_if_needed
+from app.services.broker_policy_publication import BrokerPolicyService
 from app.services.mqtt_ingest import MqttIngestService
 from app.services.pki import PkiService
 from app.services.system_settings import get_effective_managed_mqtt_settings
@@ -42,7 +43,7 @@ from app.services.telemetry_stream import get_mqtt_telemetry_broadcaster
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     settings = get_settings()
     apply_migrations(get_engine())
     session_factory = get_session_factory()
@@ -64,6 +65,10 @@ async def lifespan(_: FastAPI):
         + managed_mqtt_additional_hosts
     )
     pki_service.ensure_backend_mqtt_client_certificate()
+    if settings.broker_policy_enabled:
+        pki_service.ensure_broker_assets()
+    broker_policy = BrokerPolicyService(settings, session_factory, pki_service)
+    app.state.broker_policy_service = broker_policy
     mqtt_ingest = MqttIngestService(
         settings,
         session_factory,
@@ -76,15 +81,17 @@ async def lifespan(_: FastAPI):
         provider_registry,
     )
     alert_monitor = AlertPolicyMonitorService(settings, session_factory)
-    await mqtt_ingest.start()
-    await action_dispatcher.start()
-    await alert_monitor.start()
     try:
+        await broker_policy.start()
+        await mqtt_ingest.start()
+        await action_dispatcher.start()
+        await alert_monitor.start()
         yield
     finally:
         await alert_monitor.stop()
         await action_dispatcher.stop()
         await mqtt_ingest.stop()
+        await broker_policy.stop()
 
 
 def create_app() -> FastAPI:

@@ -6,6 +6,8 @@ services:
     restart: "no"
     env_file:
       - ./backend/.env
+    environment:
+      BROKER_POLICY_ENABLED: "true"
     command: ["python", "-m", "app.scripts.pki_init"]
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -52,7 +54,9 @@ services:
         fi
 
   mosquitto:
-    image: eclipse-mosquitto:2
+    build:
+      context: ./mosquitto
+    image: openhop-glass-broker:local
     container_name: openhop_glass_mosquitto
     restart: unless-stopped
     depends_on:
@@ -62,12 +66,11 @@ services:
       - "8883:8883"
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./pki:/mosquitto/pki:ro
+      - ./pki/broker:/mosquitto/pki:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 8883 --cafile /mosquitto/pki/ca.crt.pem --cert /mosquitto/pki/mqtt-backend-client.crt.pem --key /mosquitto/pki/mqtt-backend-client.key.pem -t healthcheck -m ok >/dev/null 2>&1"]
+      test: ["CMD", "/usr/local/bin/glass-broker-healthcheck"]
       interval: 15s
       timeout: 10s
       retries: 15
@@ -82,10 +85,10 @@ services:
         condition: service_completed_successfully
       pki-init:
         condition: service_completed_successfully
-      mosquitto:
-        condition: service_healthy
     env_file:
       - ./backend/.env
+    environment:
+      BROKER_POLICY_ENABLED: "true"
     ports:
       - "8080:8080"
     volumes:

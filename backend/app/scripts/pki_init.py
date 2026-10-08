@@ -8,6 +8,8 @@ def main() -> None:
     pki_service.ensure_ca()
     pki_service.ensure_mqtt_broker_server_certificate()
     pki_service.ensure_backend_mqtt_client_certificate()
+    if settings.broker_policy_enabled:
+        pki_service.ensure_broker_assets()
 
 
 if __name__ == "__main__":

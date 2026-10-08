@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     mqtt_repeater_tls_enabled: bool = False
     mqtt_ingest_enabled: bool = True
     mqtt_ingest_queue_maxsize: int = 2000
+    broker_policy_enabled: bool = False
+    broker_policy_interval_seconds: int = Field(default=5, ge=1, le=300)
     pki_state_dir: str = "/app/data/pki"
     pki_ca_common_name: str = "openHop Glass Local CA"
     pki_ca_valid_days: int = 3650

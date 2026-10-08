@@ -234,6 +234,59 @@ docker compose exec -T postgres psql -U postgres openhop_glass < pymc_glass.sql
 docker compose up -d
 ```
 
+## Broker policy enforcement (Task5 candidate source)
+
+This changes authorization, not just branding. Do not apply it to an existing
+live stack as part of a brand-only migration. Acceptance requires an isolated
+synthetic candidate and actual TLS/ACL probes; source tests and container
+liveness alone are not proof of enforcement.
+
+- Source Compose explicitly enables `BROKER_POLICY_ENABLED=true` for pki-init
+  and the backend; standalone Settings default to disabled for legacy fixtures.
+  The sole API-process publisher polls every 5 seconds (configurable 1–300).
+  Run one API worker with one writable PKI volume; multiple writers are unsupported.
+- Existing CA bytes and flat backend-client paths are preserved. pki-init creates
+  `pki/broker` with the public CA, broker server certificate/key, and a signed empty
+  CRL plus deny-device ACL before broker startup. It never resets existing policy.
+  The broker mounts ONLY `pki/broker`, never the CA signing key or backend client
+  private key. Its fixed UID/GID is 1883; broker directories are 0750 and its
+  server key and policy files 0640 with GID1883. Backend/pki-init container root
+  provisions this fixed group ownership; a nonroot host without that group fails
+  honestly, and must not be worked around with world-readable private keys.
+- Bounded DB policy (1024 device candidates, 4096 revoked certificate records)
+  permits only adopted/connected/offline canonical Repeater IDs with a live
+  credential and current certificate, parent/current serial agreement, matching
+  device CN and valid certificate dates. Application naive DB dates mean UTC.
+  Backend CN `openhop-glass-backend` reads `glass/#` only; each device CN writes
+  only `glass/device:<uuid>/#`, with no subscribe or cross-device permission.
+  Legacy name-based certificate CNs have no fallback access. Existing MQTT ingest
+  uses its separate backend private key in the backend volume, not in the broker;
+  configure TLS subscriber paths/hostname for the candidate explicitly. Devices
+  need stable-ID enrollment before they can publish under this policy.
+- Signed CRL and ACL are staged privately and exposed through an atomic `current`
+  symlink. Pre-switch errors retain the last good files; post-switch durability
+  errors are uncertain and retried from actual files. One previous generation is
+  retained. Broker reads/reloads and DB updates are NOT an atomic transaction.
+  Malformed/over-bound DB input fails observably; no broad ACL is substituted.
+  Logical CRL comparison prevents signing/restarting on every poll, including
+  after API restart. CRLs refresh one hour before expiry.
+- The fixed nonroot wrapper supervises only its own Mosquitto child. ACL changes
+  send HUP; CRL or server TLS asset changes restart the child. **CRL changes
+  briefly disconnect ALL clients**, including already-connected revoked serials;
+  HUP alone cannot evict those sessions. Remaining authorized clients reconnect.
+  Healthcheck verifies the fixed child's PID liveness only, not an MQTT publish
+  using the backend's read-only identity. Backend startup depends on DB/pki-init,
+  not broker health, avoiding a policy-startup dependency cycle.
+- Credential revocation invalidates all associated certificate serials; specific
+  certificate revocation only denies that serial. DB device authentication
+  revocation is immediate after commit, while broker enforcement is eventually
+  pending (poll plus supervisor delay). API DB-only responses, worker publication
+  timestamps, and node reconnect reports are NOT broker confirmation. Require
+  real probes for own/cross writes, subscribe/backend-write denial, expired and
+  mismatched TLS keys, existing-session eviction and reconnect after rotation.
+  Worker logs only safe exception class names and exposes last error/publication
+  state internally; never keys, token hashes or DB connection traces.
+
 ## Rollback
 
 For a brand-only change, rollback is usually a Git/deployment rollback:

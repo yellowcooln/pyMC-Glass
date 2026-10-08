@@ -305,6 +305,8 @@ class PkiService:
                 dns_names=dns_names,
                 ip_names=ip_names,
             )
+            if self._settings.broker_policy_enabled:
+                self.ensure_broker_assets()
             return True
 
     def ensure_backend_mqtt_client_certificate(self) -> None:
@@ -322,6 +324,60 @@ class PkiService:
                 common_name="openhop-glass-backend",
                 ext_key_usages=[ExtendedKeyUsageOID.CLIENT_AUTH],
             )
+
+    @property
+    def broker_directory(self) -> Path:
+        return self._state_dir / "broker"
+
+    def broker_signing_material(self):
+        """Private CA material stays in the backend, never in broker_directory."""
+        with self._lock:
+            return (
+                x509.load_pem_x509_certificate(self._ca_cert_path.read_bytes()),
+                serialization.load_pem_private_key(self._ca_key_path.read_bytes(), password=None),
+            )
+
+    def ensure_broker_assets(self) -> None:
+        import os
+        from uuid import uuid4
+
+        from app.services.broker_policy_publication import (
+            BrokerPolicyPublisher,
+            PolicySnapshot,
+            broker_permissions,
+            stage_file,
+            sync_directory,
+        )
+
+        with self._lock:
+            root = self.broker_directory
+            root.mkdir(parents=True, exist_ok=True)
+            broker_permissions(root, 0o750)
+            # Only these three assets cross the broker boundary. Flat layout is
+            # retained for existing backend client consumers.
+            for source in (
+                self._ca_cert_path,
+                self._mqtt_broker_cert_path,
+                self._mqtt_broker_key_path,
+            ):
+                target = root / source.name
+                data = source.read_bytes()
+                if target.exists() and target.read_bytes() == data:
+                    broker_permissions(
+                        target, 0o640 if source == self._mqtt_broker_key_path else 0o644
+                    )
+                    continue
+                staged = root / (".asset-" + uuid4().hex)
+                try:
+                    stage_file(
+                        staged, data, 0o640 if source == self._mqtt_broker_key_path else 0o644
+                    )
+                    os.replace(staged, target)
+                    sync_directory(root)
+                finally:
+                    staged.unlink(missing_ok=True)
+            if not (root / "current").exists():
+                BrokerPolicyPublisher(self).publish(PolicySnapshot((), ()), datetime.now(UTC))
 
     def should_renew_certificate(self, expires_at: datetime | None) -> bool:
         if expires_at is None:
