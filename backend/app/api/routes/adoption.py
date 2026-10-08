@@ -7,6 +7,7 @@ from app.db.session import get_db_session
 from app.schemas.adoption import AdoptionActionRequest, AdoptionActionResponse
 from app.schemas.repeater import RepeaterResponse
 from app.security.deps import require_roles
+from app.security.devices import lock_repeater, revoke_device_credentials
 from app.services.audit import write_audit_log
 
 router = APIRouter(prefix="/api/adoption")
@@ -49,7 +50,7 @@ def adopt_repeater(
     db: Session = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> AdoptionActionResponse:
-    repeater = db.scalar(select(Repeater).where(Repeater.id == repeater_id))
+    repeater = lock_repeater(db, repeater_id)
     if repeater is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repeater not found")
 
@@ -77,11 +78,12 @@ def reject_repeater(
     db: Session = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> AdoptionActionResponse:
-    repeater = db.scalar(select(Repeater).where(Repeater.id == repeater_id))
+    repeater = lock_repeater(db, repeater_id)
     if repeater is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repeater not found")
 
     repeater.status = "rejected"
+    revoke_device_credentials(db, repeater.id)
     write_audit_log(
         db,
         action="adoption_rejected",

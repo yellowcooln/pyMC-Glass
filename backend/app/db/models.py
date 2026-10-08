@@ -18,6 +18,13 @@ def _new_id() -> str:
     return str(uuid4())
 
 
+class BootstrapClaim(Base):
+    __tablename__ = "bootstrap_claim"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -85,6 +92,45 @@ class Repeater(Base):
         default=_now_utc,
         onupdate=_now_utc,
     )
+
+
+class DeviceObservation(Base):
+    __tablename__ = "device_observations"
+
+    repeater_id: Mapped[str] = mapped_column(
+        ForeignKey("repeaters.id", ondelete="CASCADE"), primary_key=True
+    )
+    boot_id: Mapped[str] = mapped_column(String(36))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    capabilities_json: Mapped[str] = mapped_column(Text)
+    inventory_json: Mapped[str] = mapped_column(Text)
+    telemetry_json: Mapped[str] = mapped_column(Text)
+
+
+class DeviceEnrollment(Base):
+    __tablename__ = "device_enrollments"
+
+    repeater_id: Mapped[str] = mapped_column(
+        ForeignKey("repeaters.id", ondelete="CASCADE"), primary_key=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expected_node_name: Mapped[str] = mapped_column(String(128))
+    expected_pubkey: Mapped[str] = mapped_column(String(130))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceCredential(Base):
+    __tablename__ = "device_credentials"
+
+    repeater_id: Mapped[str] = mapped_column(
+        ForeignKey("repeaters.id", ondelete="CASCADE"), primary_key=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    csr_public_key_sha256: Mapped[str] = mapped_column(String(64))
+    cert_serial: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TopologyObservationSample(Base):

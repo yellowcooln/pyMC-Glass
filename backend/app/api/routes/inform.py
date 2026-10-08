@@ -3,14 +3,17 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes.inform_v2 import bounded_inform_json, check_name_collision
 from app.config import get_settings
 from app.contracts.v1.inform import InformRequestV1
-from app.db.models import Certificate, CommandQueueItem, InformSnapshot, Repeater
+from app.db.models import CommandQueueItem, InformSnapshot, Repeater
 from app.db.session import get_db_session
+from app.security.devices import bind_device_identity, get_current_device, lock_repeater
 from app.services.alert_policy import evaluate_policies_for_repeater
 from app.services.audit import write_audit_log
 from app.services.config_snapshot import (
@@ -18,7 +21,6 @@ from app.services.config_snapshot import (
     SnapshotEncryptionError,
     SnapshotPayloadError,
 )
-from app.services.pki import PkiService
 from app.services.repeater_policy import (
     mark_repeater_policy_sync_dispatched,
     mark_repeater_policy_sync_result,
@@ -197,70 +199,49 @@ def _ensure_glass_managed_mqtt_command(db: Session, repeater: Repeater) -> None:
     )
 
 
-def _issue_certificate_response(
-    *,
-    db: Session,
-    repeater: Repeater,
-    pki_service: PkiService,
-    force_renewal: bool = False,
-) -> dict | None:
-    target_expiry = _normalize_datetime(repeater.cert_expires_at)
-    if not force_renewal and not pki_service.should_renew_certificate(target_expiry):
-        return None
-    pki_service.ensure_ca()
-
-    bundle = pki_service.issue_repeater_certificate(
-        node_name=repeater.node_name,
-        repeater_pubkey=repeater.pubkey,
-    )
-    repeater.cert_serial = bundle.serial
-    repeater.cert_expires_at = bundle.expires_at
-    db.add(
-        Certificate(
-            repeater_id=repeater.id,
-            serial=bundle.serial,
-            cn=bundle.subject_cn,
-            issued_at=bundle.issued_at,
-            expires_at=bundle.expires_at,
-            pem_hash=bundle.pem_hash,
-        )
-    )
-    write_audit_log(
-        db,
-        action="certificate_issued",
-        target_type="certificate",
-        target_id=bundle.serial,
-        details={
-            "node_name": repeater.node_name,
-            "serial": bundle.serial,
-            "expires_at": bundle.expires_at.isoformat(),
-        },
-    )
-    db.commit()
-    return {
-        "type": "cert_renewal",
-        "client_cert": bundle.client_cert_pem,
-        "client_key": bundle.client_key_pem,
-        "ca_cert": bundle.ca_cert_pem,
-    }
-
-
 @router.post("/inform")
 def inform(
-    payload: InformRequestV1,
     request: Request,
+    raw: dict = Depends(bounded_inform_json),
     db: Session = Depends(get_db_session),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
 ) -> dict:
+    try:
+        payload = InformRequestV1.model_validate(raw)
+    except ValueError as exc:
+        raise HTTPException(422, "Invalid inform envelope") from exc
+    if request.headers.get("authorization") is not None:
+        repeater = get_current_device(request, credentials, db)
+        bind_device_identity(repeater, device_id=repeater.id, pubkey=payload.pubkey)
+        check_name_collision(db, repeater, payload.node_name)
+    else:
+        by_name = db.scalar(select(Repeater).where(Repeater.node_name == payload.node_name))
+        by_key = db.scalar(select(Repeater).where(Repeater.pubkey == payload.pubkey))
+        # Discovery must not race adoption/rejection into an anonymous operational write.
+        existing_ids = sorted({row.id for row in (by_name, by_key) if row is not None})
+        locked = {device_id: lock_repeater(db, device_id) for device_id in existing_ids}
+        if any(row is None for row in locked.values()):
+            raise HTTPException(401, "Discovery identity changed")
+        by_name = locked[by_name.id] if by_name is not None else None
+        by_key = locked[by_key.id] if by_key is not None else None
+        if any(row is not None and row.status != "pending_adoption" for row in (by_name, by_key)):
+            # No observation, result ingestion, provisioning or dispatch before authority.
+            get_current_device(request, credentials, db)
+        if payload.command_results:
+            raise HTTPException(401, "Device credential required for results")
+        if (by_name is not None or by_key is not None) and (
+            by_name is None or by_key is None or by_name.id != by_key.id
+        ):
+            raise HTTPException(409, "Discovery identity collision")
+        repeater = by_name
     now = _utc_now()
     settings = get_settings()
-    pki_service = PkiService(settings)
     effective_snapshot_keys, _, _ = get_effective_config_snapshot_encryption_keys(db)
     config_snapshot_service = ConfigSnapshotService(
         settings,
         encryption_keys=effective_snapshot_keys,
     )
-    force_certificate_renewal = False
-    repeater = db.scalar(select(Repeater).where(Repeater.node_name == payload.node_name))
+
     system_payload = payload.system.model_dump()
     if payload.sensors is not None:
         system_payload["sensors"] = payload.sensors
@@ -269,7 +250,6 @@ def inform(
         location = _normalize_location(payload.location) or _extract_location_from_settings(
             payload.settings
         )
-        repeater = db.scalar(select(Repeater).where(Repeater.pubkey == payload.pubkey))
 
     if repeater is None:
         repeater = Repeater(
@@ -282,7 +262,6 @@ def inform(
             config_hash=payload.config_hash,
             inform_ip=_inform_source_ip(request),
             last_inform_at=now,
-            cert_expires_at=_normalize_datetime(payload.cert_expires_at),
             system_json=_compact_json(system_payload),
             radio_json=_compact_json(payload.radio.model_dump()),
             counters_json=_compact_json(payload.counters.model_dump()),
@@ -313,10 +292,7 @@ def inform(
         repeater.counters_json = _compact_json(payload.counters.model_dump())
         if payload.settings:
             repeater.settings_json = _compact_json(payload.settings)
-        reported_cert_expires_at = _normalize_datetime(payload.cert_expires_at)
-        if reported_cert_expires_at is not None:
-            repeater.cert_expires_at = reported_cert_expires_at
-        if repeater.status in {"adopted", "connected"}:
+        if repeater.status in {"adopted", "connected", "offline"}:
             repeater.status = "connected"
 
     db.add(
@@ -414,8 +390,7 @@ def inform(
         elif result_details:
             result_payload["details"] = result_details
         queued.result_json = json.dumps(result_payload, default=str)
-        if queued.command == "rotate_cert":
-            force_certificate_renewal = True
+
         if queued.command == "transport_keys_sync":
             mark_transport_key_sync_result(
                 db,
@@ -454,15 +429,10 @@ def inform(
         return {"type": "noop", "interval": 300, "status": "rejected"}
     if repeater.status in {"adopted", "connected"}:
         _ensure_glass_managed_mqtt_command(db, repeater)
-        cert_response = _issue_certificate_response(
-            db=db,
-            repeater=repeater,
-            pki_service=pki_service,
-            force_renewal=force_certificate_renewal,
-        )
-        if cert_response is not None:
-            return cert_response
 
+    # Session autoflush is disabled: persist newly queued commands and result
+    # status transitions before selecting the next queued item.
+    db.flush()
     next_command = db.scalar(
         select(CommandQueueItem)
         .where(

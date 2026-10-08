@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+from device_enrollment_helpers import enroll_device
+
 
 def _bootstrap_admin(client) -> None:
     created = client.post(
@@ -130,6 +132,7 @@ def test_transport_key_sync_status_transitions_with_inform_results(client) -> No
     )
     assert created_repeater.status_code == 201
     repeater_id = created_repeater.json()["id"]
+    enroll_device(client, repeater_id, headers)
 
     created_group = client.post(
         "/api/transport-keys/groups",

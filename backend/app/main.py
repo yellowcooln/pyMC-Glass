@@ -14,8 +14,10 @@ from app.api.routes.bootstrap import router as bootstrap_router
 from app.api.routes.commands import router as commands_router
 from app.api.routes.config_snapshots import router as config_snapshots_router
 from app.api.routes.contracts import router as contracts_router
+from app.api.routes.enrollment import router as enrollment_router
 from app.api.routes.health import router as health_router
 from app.api.routes.inform import router as inform_router
+from app.api.routes.inform_v2 import router as inform_v2_router
 from app.api.routes.insights import router as insights_router
 from app.api.routes.packets import router as packets_router
 from app.api.routes.repeater_policy import router as repeater_policy_router
@@ -97,10 +99,12 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, tags=["health"])
     app.include_router(inform_router, tags=["inform"])
+    app.include_router(inform_v2_router, tags=["inform"])
     app.include_router(contracts_router, prefix="/api/contracts", tags=["contracts"])
     app.include_router(bootstrap_router, tags=["bootstrap"])
     app.include_router(auth_router, tags=["auth"])
     app.include_router(repeaters_router, tags=["repeaters"])
+    app.include_router(enrollment_router, tags=["enrollment"])
     app.include_router(adoption_router, tags=["adoption"])
     app.include_router(commands_router, tags=["commands"])
     app.include_router(config_snapshots_router, tags=["config-snapshots"])

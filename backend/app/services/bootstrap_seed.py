@@ -1,6 +1,5 @@
 import logging
 
-from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -8,6 +7,7 @@ from app.config import Settings
 from app.db.models import User
 from app.security.passwords import hash_password
 from app.services.audit import write_audit_log
+from app.services.bootstrap import BootstrapAlreadyCompleted, claim_first_admin
 
 logger = logging.getLogger(__name__)
 
@@ -35,32 +35,31 @@ def seed_default_admin_if_needed(
         raise RuntimeError("BOOTSTRAP_SEED_ADMIN_PASSWORD is shorter than AUTH_PASSWORD_MIN_LENGTH")
 
     with session_factory() as db:
-        total_users = db.scalar(select(func.count()).select_from(User)) or 0
-        if total_users > 0:
-            return
-
-        user = User(
-            email=email,
-            password_hash=hash_password(password),
-            role="admin",
-            display_name=display_name,
-            is_active=1,
-        )
-        db.add(user)
         try:
+            claim_first_admin(db)
+            user = User(
+                email=email,
+                password_hash=hash_password(password),
+                role="admin",
+                display_name=display_name,
+                is_active=1,
+            )
+            db.add(user)
             db.flush()
-        except IntegrityError:
+            write_audit_log(
+                db,
+                action="bootstrap_admin_seeded",
+                target_type="user",
+                target_id=user.id,
+                user_id=user.id,
+                details={"email": user.email},
+            )
+            db.commit()
+        except (BootstrapAlreadyCompleted, IntegrityError):
             db.rollback()
-            logger.info("Skipping bootstrap admin seed; user already exists")
+            logger.info("Skipping bootstrap admin seed; bootstrap already completed")
             return
-
-        write_audit_log(
-            db,
-            action="bootstrap_admin_seeded",
-            target_type="user",
-            target_id=user.id,
-            user_id=user.id,
-            details={"email": user.email},
-        )
-        db.commit()
+        except Exception:
+            db.rollback()
+            raise
         logger.info("Seeded default admin user for startup bootstrap")

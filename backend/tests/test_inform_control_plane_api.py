@@ -7,6 +7,8 @@ from app.db.models import ConfigSnapshot
 from app.db.session import get_session_factory
 from sqlalchemy import select
 
+from device_enrollment_helpers import enroll_device
+
 
 def _bootstrap_admin(client) -> None:
     created = client.post(
@@ -294,6 +296,7 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
     assert adopt.json()["status"] == "adopted"
 
     queue = client.post(
@@ -310,11 +313,10 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
     assert queue.status_code == 201
     command_id = queue.json()["command_id"]
 
-    second_inform = client.post("/inform", json=_inform_payload(node_name))
+    second_inform = enrollment
     assert second_inform.status_code == 200
-    assert second_inform.json()["type"] == "cert_renewal"
     assert "BEGIN CERTIFICATE" in second_inform.json()["client_cert"]
-    assert "BEGIN PRIVATE KEY" in second_inform.json()["client_key"]
+    assert "client_key" not in second_inform.json()
 
     third_inform = client.post("/inform", json=_inform_payload(node_name))
     assert third_inform.status_code == 200
@@ -381,6 +383,7 @@ def test_policy_sync_updates_runtime_policy_status(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
 
     policy = {"enabled": True, "default_action": "allow", "rules": [], "objects": {}}
     template = client.post(
@@ -401,9 +404,9 @@ def test_policy_sync_updates_runtime_policy_status(client) -> None:
     assert sync.status_code == 200
     command_id = sync.json()["command_ids"][0]
 
-    cert_response = client.post("/inform", json=_inform_payload(node_name))
+    cert_response = enrollment
     assert cert_response.status_code == 200
-    assert cert_response.json()["type"] == "cert_renewal"
+    assert "client_cert" in cert_response.json()
 
     dispatched = client.post("/inform", json=_inform_payload(node_name))
     assert dispatched.status_code == 200
@@ -437,7 +440,7 @@ def test_policy_sync_updates_runtime_policy_status(client) -> None:
     assert body["completed_at"] == "2026-04-15T12:30:45"
 
 
-def test_inform_renews_when_reported_cert_is_near_expiry(client) -> None:
+def test_inform_cannot_renew_or_overwrite_certificate_expiry(client) -> None:
     _bootstrap_admin(client)
     token = _login(client)
     headers = {"Authorization": f"Bearer {token}"}
@@ -455,11 +458,12 @@ def test_inform_renews_when_reported_cert_is_near_expiry(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
 
-    initial_issue = client.post("/inform", json=_inform_payload(node_name))
+    initial_issue = enrollment
     assert initial_issue.status_code == 200
-    assert initial_issue.json()["type"] == "cert_renewal"
     first_cert = initial_issue.json()["client_cert"]
+    assert "BEGIN CERTIFICATE" in first_cert
 
     near_expiry_payload = _inform_payload(node_name)
     near_expiry = datetime.now(UTC) + timedelta(days=1)
@@ -467,8 +471,15 @@ def test_inform_renews_when_reported_cert_is_near_expiry(client) -> None:
 
     renewal = client.post("/inform", json=near_expiry_payload)
     assert renewal.status_code == 200
-    assert renewal.json()["type"] == "cert_renewal"
-    assert renewal.json()["client_cert"] != first_cert
+    assert renewal.json()["type"] != "cert_renewal"
+    assert "client_cert" not in renewal.json()
+    assert "client_key" not in renewal.json()
+    from app.db.models import Repeater
+
+    with get_session_factory()() as db:
+        assert db.get(Repeater, repeater_id).cert_expires_at.isoformat() == (
+            datetime.fromisoformat(enrollment.json()["expires_at"]).replace(tzinfo=None).isoformat()
+        )
 
 
 def test_inform_auto_dispatches_glass_managed_mqtt_config(client) -> None:
@@ -489,10 +500,11 @@ def test_inform_auto_dispatches_glass_managed_mqtt_config(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
 
-    cert_issue = client.post("/inform", json=_inform_payload(node_name))
+    cert_issue = enrollment
     assert cert_issue.status_code == 200
-    assert cert_issue.json()["type"] == "cert_renewal"
+    assert "client_cert" in cert_issue.json()
 
     config_dispatch = client.post("/inform", json=_inform_payload(node_name))
     assert config_dispatch.status_code == 200
@@ -536,10 +548,11 @@ def test_inform_managed_mqtt_dispatch_uses_system_settings_override(client) -> N
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
 
-    cert_issue = client.post("/inform", json=_inform_payload(node_name))
+    cert_issue = enrollment
     assert cert_issue.status_code == 200
-    assert cert_issue.json()["type"] == "cert_renewal"
+    assert "client_cert" in cert_issue.json()
 
     config_dispatch = client.post("/inform", json=_inform_payload(node_name))
     assert config_dispatch.status_code == 200
@@ -552,7 +565,7 @@ def test_inform_managed_mqtt_dispatch_uses_system_settings_override(client) -> N
     assert managed["mqtt_tls_enabled"] is True
 
 
-def test_rotate_cert_command_result_forces_cert_renewal(client) -> None:
+def test_rotate_cert_result_cannot_return_server_generated_private_key(client) -> None:
     _bootstrap_admin(client)
     token = _login(client)
     headers = {"Authorization": f"Bearer {token}"}
@@ -571,10 +584,11 @@ def test_rotate_cert_command_result_forces_cert_renewal(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enrollment = enroll_device(client, repeater_id, headers)
 
-    initial_cert_issue = client.post("/inform", json=_inform_payload(node_name))
+    initial_cert_issue = enrollment
     assert initial_cert_issue.status_code == 200
-    assert initial_cert_issue.json()["type"] == "cert_renewal"
+    assert "client_cert" in initial_cert_issue.json()
 
     # Drain any queued system commands so rotate_cert can dispatch next.
     for _ in range(6):
@@ -631,9 +645,9 @@ def test_rotate_cert_command_result_forces_cert_renewal(client) -> None:
         assert follow_up.status_code == 200
         if payload["action"] == "rotate_cert":
             rotate_dispatched = True
-            assert follow_up.json()["type"] == "cert_renewal"
-            assert "BEGIN CERTIFICATE" in follow_up.json()["client_cert"]
-            assert "BEGIN PRIVATE KEY" in follow_up.json()["client_key"]
+            assert follow_up.json()["type"] != "cert_renewal"
+            assert "client_cert" not in follow_up.json()
+            assert "client_key" not in follow_up.json()
             break
 
     assert rotate_dispatched is True
@@ -658,6 +672,7 @@ def test_config_snapshot_export_ingest_encrypted_and_rotates(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enroll_device(client, repeater_id, headers)
 
     queued_command_ids: list[str] = []
     for idx in range(3):
@@ -747,6 +762,7 @@ def test_config_snapshot_request_logs_and_change_control_dedup(client) -> None:
         headers=headers,
     )
     assert adopt.status_code == 200
+    enroll_device(client, repeater_id, headers)
 
     reason = "change-control backup request"
     first_queue = client.post(

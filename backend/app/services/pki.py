@@ -8,6 +8,7 @@ from ipaddress import ip_address
 from pathlib import Path
 
 from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
@@ -25,6 +26,18 @@ class IssuedCertificateBundle:
     client_key_pem: str
     ca_cert_pem: str
     pem_hash: str
+
+
+@dataclass(slots=True)
+class IssuedDeviceCertificate:
+    serial: str
+    subject_cn: str
+    issued_at: datetime
+    expires_at: datetime
+    client_cert_pem: str
+    ca_cert_pem: str
+    pem_hash: str
+    csr_public_key_sha256: str
 
 
 class PkiService:
@@ -88,6 +101,101 @@ class PkiService:
             cert_pem = ca_cert.public_bytes(serialization.Encoding.PEM)
             self._ca_key_path.write_bytes(key_pem)
             self._ca_cert_path.write_bytes(cert_pem)
+
+    @staticmethod
+    def validate_device_csr(csr_pem: str) -> x509.CertificateSigningRequest:
+        try:
+            raw = csr_pem.encode("ascii")
+            if (
+                len(raw) > 14000
+                or not raw.startswith(b"-----BEGIN CERTIFICATE REQUEST-----")
+                or not raw.rstrip().endswith(b"-----END CERTIFICATE REQUEST-----")
+            ):
+                raise ValueError("Invalid CSR")
+            if raw.count(b"-----BEGIN") != 1 or raw.count(b"-----END") != 1:
+                raise ValueError("Invalid CSR")
+            csr = x509.load_pem_x509_csr(raw)
+            public_key = csr.public_key()
+            if (
+                not csr.is_signature_valid
+                or not isinstance(public_key, rsa.RSAPublicKey)
+                or public_key.key_size < 2048
+            ):
+                raise ValueError("Invalid CSR")
+            return csr
+        except (ValueError, TypeError, UnicodeError, UnsupportedAlgorithm) as exc:
+            raise ValueError("Invalid CSR") from exc
+
+    def issue_device_certificate(self, *, device_id: str, csr_pem: str) -> IssuedDeviceCertificate:
+        from uuid import UUID
+
+        if str(UUID(device_id)) != device_id:
+            raise ValueError("Invalid device id")
+        csr = self.validate_device_csr(csr_pem)
+        public_key = csr.public_key()
+        fingerprint = hashlib.sha256(
+            public_key.public_bytes(
+                serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+        ).hexdigest()
+        with self._lock:
+            self.ensure_ca()
+            ca_key = serialization.load_pem_private_key(
+                self._ca_key_path.read_bytes(), password=None
+            )
+            ca_cert = x509.load_pem_x509_certificate(self._ca_cert_path.read_bytes())
+            now = datetime.now(UTC)
+            cn = "device:" + device_id
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)]))
+                .issuer_name(ca_cert.subject)
+                .public_key(public_key)
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - timedelta(minutes=5))
+                .not_valid_after(
+                    min(
+                        now + timedelta(days=self._settings.pki_client_cert_valid_days),
+                        ca_cert.not_valid_after_utc,
+                    )
+                )
+                .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+                .add_extension(
+                    x509.KeyUsage(
+                        digital_signature=True,
+                        content_commitment=False,
+                        key_encipherment=True,
+                        data_encipherment=False,
+                        key_agreement=False,
+                        key_cert_sign=False,
+                        crl_sign=False,
+                        encipher_only=False,
+                        decipher_only=False,
+                    ),
+                    critical=True,
+                )
+                .add_extension(
+                    x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False
+                )
+                .add_extension(
+                    x509.SubjectAlternativeName(
+                        [x509.UniformResourceIdentifier("urn:openhop:device:" + device_id)]
+                    ),
+                    critical=False,
+                )
+                .sign(ca_key, hashes.SHA256())
+            )
+            pem = cert.public_bytes(serialization.Encoding.PEM)
+            return IssuedDeviceCertificate(
+                serial=format(cert.serial_number, "x"),
+                subject_cn=cn,
+                issued_at=cert.not_valid_before_utc,
+                expires_at=cert.not_valid_after_utc,
+                client_cert_pem=pem.decode("ascii"),
+                ca_cert_pem=ca_cert.public_bytes(serialization.Encoding.PEM).decode("ascii"),
+                pem_hash=hashlib.sha256(pem).hexdigest(),
+                csr_public_key_sha256=fingerprint,
+            )
 
     def issue_repeater_certificate(
         self,
