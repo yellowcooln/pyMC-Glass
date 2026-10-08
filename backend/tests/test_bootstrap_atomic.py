@@ -24,6 +24,18 @@ def sessions(tmp_path):
     engine.dispose()
 
 
+@pytest.fixture(params=[None, "false"], ids=["inherited-env", "seeding-disabled-env"])
+def seed_settings(request, monkeypatch):
+    if request.param is not None:
+        monkeypatch.setenv("BOOTSTRAP_SEED_ADMIN_ENABLED", request.param)
+    return Settings(
+        bootstrap_seed_admin_enabled=True,
+        bootstrap_seed_admin_email="seed@example.com",
+        bootstrap_seed_admin_password="strong-test-password",
+        auth_password_min_length=12,
+    )
+
+
 def payload(email="first@example.com"):
     return BootstrapAdminRequest(email=email, password="strong-test-password")
 
@@ -105,15 +117,13 @@ def test_existing_user_preserved_and_claim_rolled_back(sessions):
 
 
 @pytest.mark.parametrize("seed_competes", [False, True])
-def test_file_sqlite_concurrent_distinct_emails(sessions, seed_competes):
+def test_file_sqlite_concurrent_distinct_emails(sessions, seed_competes, seed_settings):
     barrier = Barrier(2)
 
     def run(index):
         barrier.wait(timeout=5)
         if index == 1 and seed_competes:
-            seed_default_admin_if_needed(
-                Settings(bootstrap_seed_admin_email="seed@example.com"), sessions
-            )
+            seed_default_admin_if_needed(seed_settings, sessions)
             return "seed"
         with sessions() as db:
             try:
@@ -131,8 +141,8 @@ def test_file_sqlite_concurrent_distinct_emails(sessions, seed_competes):
         assert results[0] in (200, 409)
 
 
-def test_seed_does_not_reopen_or_replace_user(sessions):
-    settings = Settings(bootstrap_seed_admin_email="seed@example.com")
+def test_seed_does_not_reopen_or_replace_user(sessions, seed_settings):
+    settings = seed_settings
     seed_default_admin_if_needed(settings, sessions)
     seed_default_admin_if_needed(settings, sessions)
     assert counts(sessions) == (1, 1)

@@ -133,6 +133,30 @@ class DeviceCredential(Base):
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class DeviceCertificateRotation(Base):
+    """Bounded public renewal response; reports are assertions, not broker proof."""
+
+    __tablename__ = "device_certificate_rotations"
+
+    repeater_id: Mapped[str] = mapped_column(
+        ForeignKey("repeaters.id", ondelete="CASCADE"), primary_key=True
+    )
+    request_id: Mapped[str] = mapped_column(String(36))
+    credential_token_hash: Mapped[str] = mapped_column(String(64))
+    csr_public_key_sha256: Mapped[str] = mapped_column(String(64))
+    previous_cert_serial: Mapped[str] = mapped_column(String(128))
+    cert_serial: Mapped[str] = mapped_column(String(128))
+    client_cert_pem: Mapped[str] = mapped_column(Text)
+    ca_cert_pem: Mapped[str] = mapped_column(Text)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fingerprint_sha256: Mapped[str] = mapped_column(String(64))
+    node_reported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    node_reported_boot_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+
 class TopologyObservationSample(Base):
     __tablename__ = "topology_observation_samples"
     __table_args__ = (
