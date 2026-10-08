@@ -1,0 +1,7 @@
+# Parent specification review: Task5(c1)
+
+PASS for the bounded inactive pending-CSR slice, not full Task5. Reviewed full rotation_state.py and tests against parent node-rotation-state-decisions.md. API returns only renewal request; strict context/generation origin binding, fresh RSA2048 signed CSR, exact-state reuse, private dirfd storage, fixed flock, prepublication cleanup, postpublication retry, fsync/readback and sanitized errors match. Expired-certificate recovery deliberately unsupported here, no handler/network/capability activation.
+
+Parent executed actual CT301 Python3.12 secure ancestry tests: implementer suite52passed1skip (directory FIFO combination inapplicable); additional parent acceptance probe1passed. Initial implementer process test fed child stdin sequentially and was not proof of simultaneous process contention. Parent added test_glass_rotation_state_parent.py feeding eight processes concurrently; actual gate passed without weakening ancestry. Thread/process/restart coverage now established for this limited slice. No claim crash tests cover later installation/report-outbox steps. Source check-onlyRuff passed; parent test blank-line format correction pending finalrerun.
+
+Next required gate is independent quality review, then final significant parent fullsuite/JUnit. Source is uncommitted/unpublished until those gates pass. Existing Tasks1–4 evidence and Task5 server checkpoints preserved. Realbroker/HTTPS activation, bundleinstallation/reportproducer, Tasks6–20 remain.
