@@ -4,7 +4,17 @@ from datetime import UTC, datetime
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -103,6 +113,9 @@ class DeviceObservation(Base):
     boot_id: Mapped[str] = mapped_column(String(36))
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     capabilities_json: Mapped[str] = mapped_column(Text)
+    received_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=_now_utc, nullable=True
+    )
     inventory_json: Mapped[str] = mapped_column(Text)
     telemetry_json: Mapped[str] = mapped_column(Text)
 
@@ -501,6 +514,74 @@ class CommandQueueItem(Base):
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     result_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     requested_by: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+
+
+class DeviceCommand(Base):
+    """Isolated v2 lifecycle, never read from or dispatched via legacy command_queue."""
+
+    __tablename__ = "device_commands"
+    __table_args__ = (
+        UniqueConstraint("device_id", "request_id", name="uq_device_commands_request"),
+        UniqueConstraint("device_id", "idempotency_key", name="uq_device_commands_idempotency"),
+        UniqueConstraint("device_id", "execution_id", name="uq_device_commands_execution"),
+        CheckConstraint("attempt >= 0 AND attempt <= 3", name="ck_device_commands_attempt"),
+        CheckConstraint(
+            "status IN ('queued','received','running','awaiting_verification',"
+            "'succeeded','failed','expired','cancelled','unknown')",
+            name="ck_device_commands_status",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    device_id: Mapped[str] = mapped_column(
+        ForeignKey("repeaters.id", ondelete="CASCADE"), index=True
+    )
+    request_id: Mapped[str] = mapped_column(String(36))
+    execution_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    action: Mapped[str] = mapped_column(String(64))
+    request_json: Mapped[str] = mapped_column(Text)
+    request_sha256: Mapped[str] = mapped_column(String(64))
+    requester_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    requested_by: Mapped[str] = mapped_column(String(128))
+    credential_generation: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    lease_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    lease_issued_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    acceptance_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    persisted: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    applied: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    restart_required: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    superseded_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("device_commands.id"), nullable=True
+    )
+
+
+class DeviceCommandReceipt(Base):
+    __tablename__ = "device_command_receipts"
+    __table_args__ = (
+        UniqueConstraint("command_id", "result_sha256", name="uq_device_command_receipt_digest"),
+    )
+    acceptance_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    command_id: Mapped[str] = mapped_column(
+        ForeignKey("device_commands.id", ondelete="CASCADE"), index=True
+    )
+    result_json: Mapped[str] = mapped_column(Text)
+    result_sha256: Mapped[str] = mapped_column(String(64))
+    lease_id: Mapped[str] = mapped_column(String(36))
+    attempt: Mapped[int] = mapped_column(Integer)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
 
 
 class ConfigSnapshot(Base):

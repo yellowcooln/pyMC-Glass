@@ -169,7 +169,7 @@ def test_v2_auth_identity_https_and_bounds(enrolled):
     assert client.post("/inform/v2", json=body, headers=auth).status_code == 200
 
 
-def test_v2_results_are_not_acked_or_dispatched_and_latest_observation_updates(enrolled):
+def test_v2_unoffered_results_roll_back_and_latest_observation_updates(enrolled):
     from app.contracts.v2.telemetry import ResponseV2
     from app.db.models import DeviceObservation
 
@@ -193,10 +193,59 @@ def test_v2_results_are_not_acked_or_dispatched_and_latest_observation_updates(e
         }
     ]
     response = client.post("/inform/v2", json=body, headers=auth)
+    assert response.status_code == 409
+    with get_session_factory()() as db:
+        assert db.get(DeviceObservation, device_id) is None
+        assert db.get(Repeater, device_id).last_inform_at is None
+        assert db.scalar(select(CommandQueueItem)).status == "queued"
+        assert db.scalar(select(CommandQueueItem)).result_json is None
+
+    body["results"] = []
+    response = client.post("/inform/v2", json=body, headers=auth)
     assert response.status_code == 200
     parsed = ResponseV2.model_validate(response.json())
     assert not parsed.accepted_results and not parsed.jobs and not parsed.queries
+    with get_session_factory()() as db:
+        row = db.get(DeviceObservation, device_id)
+        original_observation = (
+            row.boot_id,
+            row.sent_at,
+            row.received_at,
+            row.capabilities_json,
+            row.inventory_json,
+            row.telemetry_json,
+        )
+        original_last_inform = db.get(Repeater, device_id).last_inform_at
     body.update(boot_id=str(uuid4()), telemetry={"cpu": 99}, capabilities={"telemetry": 2})
+    body["results"] = [
+        dict(
+            version=2,
+            type="result",
+            device_id=device_id,
+            boot_id=body["boot_id"],
+            sent_at=body["sent_at"],
+            request_id=str(uuid4()),
+            execution_id=None,
+            status="succeeded",
+            completed_at=body["sent_at"],
+            details={"unpersisted": True},
+        )
+    ]
+    assert client.post("/inform/v2", json=body, headers=auth).status_code == 409
+    with get_session_factory()() as db:
+        row = db.get(DeviceObservation, device_id)
+        assert (
+            row.boot_id,
+            row.sent_at,
+            row.received_at,
+            row.capabilities_json,
+            row.inventory_json,
+            row.telemetry_json,
+        ) == original_observation
+        assert db.get(Repeater, device_id).last_inform_at == original_last_inform
+        assert db.scalar(select(CommandQueueItem)).status == "queued"
+        assert db.scalar(select(CommandQueueItem)).result_json is None
+    body["results"] = []
     with get_session_factory()() as db:
         db.get(Repeater, device_id).node_name = "renamed"
         db.commit()

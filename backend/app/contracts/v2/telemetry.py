@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from app.contracts.v2.command import JobV2, QueryV2, ResultAcceptanceV2, ResultV2
+from app.contracts.v2.command import JobV2, QueryV2, ResultAcceptanceV2, ResultV2, result_sha256
 from app.contracts.v2.common import Contract, Envelope, UTCDateTime, UUIDValue, checked_json
 from app.contracts.v2.device import Capabilities, InventoryV2
 
@@ -84,9 +84,14 @@ class ResponseV2(Envelope):
     def check_inform(self, inform: InformV2) -> None:
         if self.device_id != inform.device_id or self.boot_id != inform.boot_id:
             raise ValueError("response identity mismatch")
-        offered = {(r.request_id, r.execution_id) for r in inform.results}
+        offered = {(r.request_id, r.execution_id): r for r in inform.results}
         if any((r.request_id, r.execution_id) not in offered for r in self.accepted_results):
             raise ValueError("acceptance references an unoffered result")
+        for receipt in self.accepted_results:
+            if receipt.result_sha256 is not None and receipt.result_sha256 != result_sha256(
+                offered[(receipt.request_id, receipt.execution_id)]
+            ):
+                raise ValueError("acceptance digest does not match offered result")
         if self.sent_at < inform.sent_at:
             raise ValueError("response predates inform")
 

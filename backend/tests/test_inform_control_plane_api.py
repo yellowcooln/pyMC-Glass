@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from app.api.routes.inform import _inform_source_ip
-from app.db.models import ConfigSnapshot
+from app.db.models import AuditLog, CommandQueueItem, ConfigSnapshot
 from app.db.session import get_session_factory
 from sqlalchemy import select
 
@@ -299,6 +299,9 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
     enrollment = enroll_device(client, repeater_id, headers)
     assert adopt.json()["status"] == "adopted"
 
+    with get_session_factory()() as db:
+        queue_ids = set(db.scalars(select(CommandQueueItem.id)))
+        audit_ids = set(db.scalars(select(AuditLog.id)))
     queue = client.post(
         "/api/commands",
         json={
@@ -310,8 +313,30 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
         },
         headers=headers,
     )
-    assert queue.status_code == 201
-    command_id = queue.json()["command_id"]
+    assert queue.status_code == 409
+    with get_session_factory()() as db:
+        assert set(db.scalars(select(CommandQueueItem.id))) == queue_ids
+        assert set(db.scalars(select(AuditLog.id))) == audit_ids
+        # Synthetic old-database history, not admission through the retired API.
+        historical = CommandQueueItem(
+            repeater_id=repeater_id,
+            command="restart_service",
+            status="queued",
+            params_json="{}",
+            requested_by="admin@example.com",
+            created_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        db.add(historical)
+        db.commit()
+        command_id = historical.id
+
+    anonymous = client.post(
+        "/inform", json=_inform_payload(node_name), headers={"Authorization": ""}
+    )
+    assert anonymous.status_code == 401
+    with get_session_factory()() as db:
+        assert db.get(CommandQueueItem, command_id).status == "queued"
+        assert db.get(CommandQueueItem, command_id).result_json is None
 
     second_inform = enrollment
     assert second_inform.status_code == 200
@@ -333,6 +358,11 @@ def test_inform_to_adoption_and_command_lifecycle(client) -> None:
             "completed_at": "2026-04-15T12:30:45Z",
         }
     ]
+    anonymous_result = client.post("/inform", json=payload, headers={"Authorization": ""})
+    assert anonymous_result.status_code == 401
+    with get_session_factory()() as db:
+        assert db.get(CommandQueueItem, command_id).status == "dispatched"
+        assert db.get(CommandQueueItem, command_id).result_json is None
     fourth_inform = client.post("/inform", json=payload)
     assert fourth_inform.status_code == 200
     assert fourth_inform.json()["type"] == "command"
@@ -612,6 +642,9 @@ def test_rotate_cert_result_cannot_return_server_generated_private_key(client) -
             if follow_up.json()["type"] == "noop":
                 break
 
+    with get_session_factory()() as db:
+        queue_ids = set(db.scalars(select(CommandQueueItem.id)))
+        audit_ids = set(db.scalars(select(AuditLog.id)))
     rotate_command = client.post(
         "/api/commands",
         json={
@@ -623,7 +656,23 @@ def test_rotate_cert_result_cannot_return_server_generated_private_key(client) -
         },
         headers=headers,
     )
-    assert rotate_command.status_code == 201
+    assert rotate_command.status_code == 409
+    with get_session_factory()() as db:
+        assert set(db.scalars(select(CommandQueueItem.id))) == queue_ids
+        assert set(db.scalars(select(AuditLog.id))) == audit_ids
+        # Exercise only a synthetic pre-existing legacy row; new rotate_cert
+        # admission is forbidden, but old results must never issue private keys.
+        historical = CommandQueueItem(
+            repeater_id=repeater_id,
+            command="rotate_cert",
+            status="queued",
+            params_json="{}",
+            requested_by="admin@example.com",
+            created_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        db.add(historical)
+        db.commit()
+        historical_id = historical.id
 
     rotate_dispatched = False
     for _ in range(6):
@@ -644,13 +693,19 @@ def test_rotate_cert_result_cannot_return_server_generated_private_key(client) -
         follow_up = client.post("/inform", json=command_result_payload)
         assert follow_up.status_code == 200
         if payload["action"] == "rotate_cert":
+            assert payload["command_id"] == historical_id
             rotate_dispatched = True
             assert follow_up.json()["type"] != "cert_renewal"
             assert "client_cert" not in follow_up.json()
             assert "client_key" not in follow_up.json()
+            assert "PRIVATE KEY" not in follow_up.text
             break
 
     assert rotate_dispatched is True
+    command = client.get(f"/api/commands/{historical_id}", headers=headers)
+    assert command.status_code == 200
+    assert command.json()["status"] == "success"
+    assert command.json()["result"]["message"] == "ok"
 
 
 def test_config_snapshot_export_ingest_encrypted_and_rotates(client) -> None:

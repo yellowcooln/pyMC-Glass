@@ -1,4 +1,4 @@
-"""Modelled command lifecycle. No execution, persistence or dispatch is activated."""
+"""Bounded typed command wire contracts, independent of persistence and execution."""
 
 from datetime import datetime
 from typing import Literal
@@ -36,6 +36,21 @@ class RequestV2(Envelope):
     expires_at: UTCDateTime
     params: Details
     expected_revision: str | None = Field(default=None, min_length=1, max_length=64)
+    lease_id: UUIDValue | None = Field(default=None, exclude_if=lambda v: v is None)
+    attempt: int | None = Field(
+        default=None, strict=True, ge=1, le=3, exclude_if=lambda v: v is None
+    )
+    lease_expires_at: UTCDateTime | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @model_validator(mode="after")
+    def delivery_lease(self):
+        values = (self.lease_id, self.attempt, self.lease_expires_at)
+        if any(v is not None for v in values):
+            if any(v is None for v in values):
+                raise ValueError("delivery lease fields must be present together")
+            if not self.created_at < self.lease_expires_at <= self.expires_at:
+                raise ValueError("delivery lease deadline outside request lifetime")
+        return self
 
     @model_validator(mode="after")
     def lifetime_and_params(self):
@@ -92,7 +107,15 @@ class ResultV2(Envelope):
     # Query outcomes have null execution_id; jobs must match a non-null execution UUID.
     execution_id: UUIDValue | None
     status: Literal[
-        "accepted", "running", "succeeded", "failed", "unsupported", "conflict", "unknown"
+        "accepted",
+        "received",
+        "running",
+        "awaiting_verification",
+        "succeeded",
+        "failed",
+        "unsupported",
+        "conflict",
+        "unknown",
     ]
     persisted: bool | None = None
     applied: bool | None = None
@@ -101,9 +124,15 @@ class ResultV2(Envelope):
     message: str | None = Field(default=None, max_length=1024)
     details: Details = Field(default_factory=dict)
     completed_at: UTCDateTime | None = None
+    lease_id: UUIDValue | None = Field(default=None, exclude_if=lambda v: v is None)
+    attempt: int | None = Field(
+        default=None, strict=True, ge=1, le=3, exclude_if=lambda v: v is None
+    )
 
     @model_validator(mode="after")
     def completion(self):
+        if (self.lease_id is None) != (self.attempt is None):
+            raise ValueError("result lease and attempt must be present together")
         terminal = self.status in {"succeeded", "failed", "unsupported", "conflict"}
         if terminal != (self.completed_at is not None):
             raise ValueError("terminal outcomes require completion; nonterminal outcomes forbid it")
@@ -129,3 +158,32 @@ class ResultV2(Envelope):
 class ResultAcceptanceV2(Contract):
     request_id: UUIDValue
     execution_id: UUIDValue | None
+    acceptance_id: UUIDValue | None = Field(default=None, exclude_if=lambda v: v is None)
+    result_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda v: v is None
+    )
+
+    @model_validator(mode="after")
+    def receipt_pair(self):
+        if (self.acceptance_id is None) != (self.result_sha256 is None):
+            raise ValueError("acceptance ID and digest must be present together")
+        return self
+
+
+def canonical_json(model: Contract) -> str:
+    """Canonical UTF-8 JSON for durable request/result equality and receipt binding."""
+    import json
+
+    return json.dumps(
+        model.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def result_sha256(result: ResultV2) -> str:
+    from hashlib import sha256
+
+    return sha256(canonical_json(result).encode("utf-8")).hexdigest()

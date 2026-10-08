@@ -9,7 +9,7 @@ Authoritative specification: 2026-10-07_231824-openhop-glass-revamp.md and all f
 |3 v2 contracts/adapters|2|Completed M0 protocol checkpoint; preserve capability fail-closed behavior|
 |4 enrollment/authenticated inform|3|Completed isolated HTTPS/PG gate; original lab runtime remains Task4|
 |5 MQTT ownership/rotation|4|Completed integrated gate: stable-ID ingress plus actual Mosquitto2.1.2 ownership/read enforcement, DB ACL/CRL publication/connected-session revocation, actual proxied HTTPS CSR issuance and same-path CURRENT-client callback/report/completion across successive cycles, lost-response/new-boot/outbox/restart replay. See task5-integrated-acceptance.md. Expired CURRENT fails closed with explicit operator reenrollment; protected historical snapshots alone may expire. No live Repeater deployment.|
-|6 durable claiming/admission|4/3; M1 completion also requires5|Unstarted; typed leases/PostgreSQL claims/admission/result acceptance needed|
+|6 durable claiming/admission|4/3; M1 completion also requires5|Implemented reviewed typed backend lifecycle and mirrored offline lease/ACK DTOs; actual PG14 and HTTPS7 checks pass. Whole backend run had3 obsolete test expectations; test-only updates reviewed, both affected modules28pass. No full-green claim; final M1whole-suite gate pending. See task6-acceptance.md.|
 |7 node ledger/restart reconciliation|6 command lifecycle/schema|Unstarted; persistence/exactack/kill tests needed|
 |8 transactional config/policy/key|6/7 outcome and revision contracts|Unstarted; last-good metadata/state and canonical readback gates needed|
 |9 bounded domain queries|3/4 stable authenticated protocol; read-only can overlap5–8|Unstarted; delegate each domain separately|
