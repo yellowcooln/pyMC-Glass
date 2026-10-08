@@ -62,7 +62,11 @@ def _is_docker_bridge_gateway(host: str | None) -> bool:
 
 def _inform_source_ip(request: Request, current_ip: str | None = None) -> str | None:
     source_ip = request.client.host if request.client else None
-    if _is_docker_bridge_gateway(source_ip) and current_ip and not _is_docker_bridge_gateway(current_ip):
+    if (
+        _is_docker_bridge_gateway(source_ip)
+        and current_ip
+        and not _is_docker_bridge_gateway(current_ip)
+    ):
         return current_ip
     return source_ip or current_ip
 

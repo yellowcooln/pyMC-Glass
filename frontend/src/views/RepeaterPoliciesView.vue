@@ -361,7 +361,7 @@
       <div v-else>
         <label class="field-label">
           Policy Engine JSON
-          <textarea v-model="form.policyJson" class="field-textarea policy-json" spellcheck="false" @blur="loadBuilderFromJson" />
+          <textarea v-model="form.policyJson" class="field-textarea policy-json" spellcheck="false" @blur="loadBuilderFromJson()" />
         </label>
       </div>
     </UiPanelCard>
@@ -829,7 +829,7 @@ async function deleteSelectedTemplate(): Promise<void> {
 
 async function queueSync(): Promise<void> {
   if (!appState.token) return;
-  const policy = syncForm.templateId ? undefined : parsePolicy();
+  const policy = syncForm.templateId ? undefined : parsePolicy() ?? undefined;
   if (!syncForm.templateId && !policy) return;
   loading.value = true;
   try {

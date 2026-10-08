@@ -393,7 +393,7 @@ function ensureActiveParentsExpanded(): void {
 function filterItemsByRole(items: NavItem[]): NavItem[] {
   const role = appState.user?.role;
   return items
-    .map((item) => {
+    .map((item): NavItem | null => {
       if (item.roles && (!role || !item.roles.includes(role))) {
         return null;
       }

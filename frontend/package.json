@@ -5,6 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
+    "lint": "eslint --config src/tests/tooling/eslint.config.mjs .",
+    "typecheck": "vue-tsc --noEmit --strict -p tsconfig.json",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:unit:red": "GLASS_REGRESSION_RED=1 vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 5173"
   },
@@ -14,12 +19,22 @@
     "vue-router": "^5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "^4.3.1",
     "@types/leaflet": "^1.9.21",
+    "@types/node": "22.19.11",
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "2.4.6",
     "esbuild": "^0.28.1",
+    "eslint": "9.39.1",
+    "eslint-plugin-vue": "10.8.0",
+    "jsdom": "28.0.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
-    "vite": "^8.1.0"
+    "typescript-eslint": "8.71.1",
+    "vite": "^8.1.0",
+    "vitest": "4.1.11",
+    "vue-eslint-parser": "10.2.0",
+    "vue-tsc": "3.2.6"
   }
 }
