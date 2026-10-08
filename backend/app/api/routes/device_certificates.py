@@ -1,9 +1,9 @@
-"""Authenticated, bounded CSR issuance; issuance is not node installation or broker proof."""
+"""Bounded CSR issuance and authenticated node assertions, never broker proof."""
 
 import asyncio
 import hashlib
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -17,19 +17,35 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import Certificate, DeviceCertificateRotation, DeviceCredential, Repeater
 from app.db.session import get_db_session
-from app.schemas.device_certificates import CertificateRenewalRequest, CertificateRenewalResponse
+from app.schemas.device_certificates import (
+    CertificateRenewalRequest,
+    CertificateRenewalResponse,
+    CertificateReportRequest,
+    CertificateReportResponse,
+)
 from app.security.devices import bind_device_identity, get_current_device, require_device_https
 from app.services.audit import write_audit_log
 from app.services.pki import PkiService
 
 router = APIRouter()
 RENEWAL_BODY_TIMEOUT_SECONDS = 10.0
+REPORT_BODY_TIMEOUT_SECONDS = 10.0
 _renewal_bearer = HTTPBearer(auto_error=False)
 
 
 def _utc(value: datetime) -> datetime:
     # SQLite drops timezone metadata; preserve identical public retry serialization.
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _rate_anchor(rotation: DeviceCertificateRotation) -> datetime:
+    issued_at = _utc(rotation.issued_at)
+    leaf = x509.load_pem_x509_certificate(rotation.client_cert_pem.encode("ascii"))
+    # Older rows stored the backdated X.509 validity start, not server issuance.
+    # Recognize the exact alias only; leave persisted history untouched.
+    if issued_at == leaf.not_valid_before_utc:
+        return leaf.not_valid_before_utc + timedelta(minutes=5)
+    return issued_at
 
 
 async def bounded_renewal(request: Request) -> CertificateRenewalRequest:
@@ -65,6 +81,113 @@ def renewal_device(
     # Reuse the existing locked authority checks with this route's gated session.
     # Depending directly on get_current_device would bypass the body gate.
     return get_current_device(request=request, credentials=credentials, db=db)
+
+
+async def bounded_report(request: Request) -> CertificateReportRequest:
+    require_device_https(request)
+    data = bytearray()
+    try:
+        async with asyncio.timeout(REPORT_BODY_TIMEOUT_SECONDS):
+            async for chunk in request.stream():
+                if len(data) + len(chunk) > 2048:
+                    raise HTTPException(413, "Certificate report body too large")
+                data.extend(chunk)
+    except TimeoutError:
+        raise HTTPException(408, "Certificate report body timed out") from None
+    try:
+        return CertificateReportRequest.model_validate_json(bytes(data))
+    except ValidationError:
+        raise HTTPException(422, "Invalid certificate report request") from None
+
+
+def report_db(
+    payload: CertificateReportRequest = Depends(bounded_report),
+) -> Generator[Session, None, None]:
+    # Explicit gate: body validation completes before session creation or locks.
+    yield from get_db_session()
+
+
+def report_device(
+    request: Request,
+    db: Session = Depends(report_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_renewal_bearer),
+) -> Repeater:
+    return get_current_device(request=request, credentials=credentials, db=db)
+
+
+@router.post("/device/certificates/report", response_model=CertificateReportResponse)
+def report_certificate(
+    response: Response,
+    device: Repeater = Depends(report_device),
+    payload: CertificateReportRequest = Depends(bounded_report),
+    db: Session = Depends(report_db),
+) -> CertificateReportResponse:
+    # Only an authenticated node assertion, never broker-authoritative proof.
+    bind_device_identity(device, device_id=payload.device_id)
+    try:
+        credential = db.scalar(
+            select(DeviceCredential)
+            .where(DeviceCredential.repeater_id == device.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        rotation = db.scalar(
+            select(DeviceCertificateRotation)
+            .where(DeviceCertificateRotation.repeater_id == device.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if credential is None or credential.revoked_at is not None:
+            raise HTTPException(401, "Invalid device credential")
+        now = datetime.now(UTC)
+        if (
+            rotation is None
+            or rotation.credential_token_hash != credential.token_hash
+            or rotation.request_id != payload.request_id
+            or rotation.cert_serial != payload.cert_serial
+            or credential.cert_serial != payload.cert_serial
+            or device.cert_serial != payload.cert_serial
+            or rotation.fingerprint_sha256 != payload.fingerprint_sha256
+            or _utc(rotation.expires_at) <= now
+        ):
+            raise HTTPException(409, "Stale or conflicting certificate report")
+        cert = db.scalar(
+            select(Certificate)
+            .where(Certificate.repeater_id == device.id, Certificate.serial == payload.cert_serial)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if cert is None or cert.revoked_at is not None or _utc(cert.expires_at) <= now:
+            raise HTTPException(409, "Stale or conflicting certificate report")
+        if rotation.node_reported_at is None or rotation.node_reported_boot_id != payload.boot_id:
+            rotation.node_reported_at = now
+            rotation.node_reported_boot_id = payload.boot_id
+            write_audit_log(
+                db,
+                action="device_certificate_node_reported",
+                target_type="repeater",
+                target_id=device.id,
+                details={
+                    "requester": "machine",
+                    "cert_serial": payload.cert_serial,
+                    "boot_id": payload.boot_id,
+                },
+            )
+        public = CertificateReportResponse(
+            device_id=device.id, request_id=payload.request_id, cert_serial=payload.cert_serial
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Certificate report conflict") from None
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Certificate report unavailable") from None
+    response.headers["Cache-Control"] = "no-store"
+    return public
 
 
 def _public(rotation: DeviceCertificateRotation) -> CertificateRenewalResponse:
@@ -139,9 +262,14 @@ def renew_certificate(
                 db.commit()
                 response.headers["Cache-Control"] = "no-store"
                 return public
+            if _utc(rotation.expires_at) > now and now - _rate_anchor(rotation) < timedelta(
+                seconds=3600
+            ):
+                raise HTTPException(409, "Certificate renewal rate limited")
             if rotation.node_reported_at is None and _utc(rotation.expires_at) > now:
                 raise HTTPException(409, "Certificate renewal is pending")
         issued = pki.issue_device_certificate(device_id=device.id, csr_pem=payload.csr_pem)
+        issued_at = datetime.now(UTC)
         leaf = x509.load_pem_x509_certificate(issued.client_cert_pem.encode("ascii"))
         if rotation is None:
             rotation = DeviceCertificateRotation(repeater_id=device.id)
@@ -153,7 +281,7 @@ def renew_certificate(
         rotation.cert_serial = issued.serial
         rotation.client_cert_pem = issued.client_cert_pem
         rotation.ca_cert_pem = issued.ca_cert_pem
-        rotation.issued_at = issued.issued_at
+        rotation.issued_at = issued_at
         rotation.expires_at = issued.expires_at
         rotation.fingerprint_sha256 = leaf.fingerprint(hashes.SHA256()).hex()
         rotation.node_reported_at = None

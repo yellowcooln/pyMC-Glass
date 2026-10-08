@@ -1,11 +1,11 @@
-# Device certificate rotation: server issuance slice
+# Device certificate rotation: server issuance and node assertion
 
 ## Scope and activation
 
 `POST /device/certificates/renew` is an authenticated, public-only CSR issuance
 endpoint. This is Task5(c)'s server slice, **not full Task5 completion**. It does
-not enable a UI action or advertise a node capability. No report endpoint or
-node installation helper is introduced here.
+not enable a UI action or advertise a node capability. The authenticated report
+endpoint records only a node assertion; no node installation helper is introduced.
 
 The node must generate and retain its own private key and persist a canonical
 UUID `request_id` with the corresponding CSR before sending a request. The
@@ -56,7 +56,7 @@ Errors are sanitized and do not echo CSR/request values:
   body identity mismatch.
 - 413: streamed body exceeds the byte bound.
 - 422: malformed/extra fields, noncanonical IDs, invalid CSR or CSR bounds.
-- 409: pending renewal, changed-key replay, stale/revoked replay, or database
+- 409: rate-limited or pending renewal, changed-key replay, stale/revoked replay, or database
   integrity conflict.
 - 503: issuance or transaction failure; the transaction is rolled back.
 
@@ -83,12 +83,29 @@ expiry, and leaf fingerprint. Neither the bearer token nor the CSR is stored.
   original public response without new issuance or another audit entry.
 - Reusing that request ID with another key, changed credential/parent serial,
   missing certificate history, or revoked issued certificate returns 409.
-- A different request ID in the same enrollment returns 409 while the prior
-  rotation is unreported and unexpired. A node-reported or expired row may be
-  replaced by new issuance, retaining Certificate history.
+- A different request ID in the same enrollment within 3,600 seconds of
+  actual server issuance returns 409 `Certificate renewal rate limited`, unless the current
+  rotation has expired. This check precedes the pending-report check. Beyond
+  that interval, an unreported and unexpired rotation still returns 409 pending;
+  a reported or expired row may be replaced, retaining Certificate history.
+  Exact retries remain eligible even when expired (metadata only, not a usable
+  certificate; the future node helper must reject expiry).
 - A newer enrollment hash may replace the obsolete row, but cannot retrieve
   the old response. The old enrollment's bearer loses authority through the
   existing enrollment flow.
+
+New rotation rows store actual server UTC in `DeviceCertificateRotation.issued_at`,
+captured immediately after PKI issuance returns. `Certificate.issued_at` retains
+the X.509 `not_valid_before` validity start, which PKI backdates by five minutes;
+it is not the real issuance time. Existing history and rotation timestamps are
+not rewritten. For legacy rotation rows whose timestamp exactly equals the
+stored public leaf's UTC validity start (X.509 whole-second precision), the
+rate-limit anchor is conservatively that validity start plus five minutes.
+Otherwise the anchor is the rotation's actual issuance timestamp. At 3,599
+seconds a different request is rate limited; at exactly 3,600 it passes this
+check, but an unreported/unexpired rotation still remains pending. Invalid stored
+leaf metadata on this check yields sanitized 503 without writes; exact retries
+and expiry recovery preserve their existing ordering and bypass this check.
 
 Certificate history (serial/CN/PEM hash), the bounded rotation response,
 credential serial/key hash, parent serial/expiry, and sanitized
@@ -97,6 +114,43 @@ is the immutable node, its requester is a machine, and no human user ID or
 request-provided text is attributed to it. Issuance resets the rotation's
 `node_reported_*` fields to null.
 
+## Authenticated node report
+
+`POST /device/certificates/report` uses the same HTTPS machine bearer authority.
+Its exact JSON fields are `device_id`, `request_id`, `cert_serial`,
+`fingerprint_sha256`, `boot_id`, and `connected`. All three IDs are canonical
+lowercase UUIDs; serial is positive lowercase hex with at most 40 characters;
+fingerprint is exactly 64 lowercase hex characters; `connected` must be literal
+JSON `true` (not 1 or a string). No timestamp, PEM, secret, or extra field is accepted.
+The streamed body is bounded to 2,048 bytes and a total 10-second deadline,
+with sanitized 422/408/413 responses before any session or authority lock opens.
+
+The node asserts that it readback-installed this leaf and received an actual
+successful current MQTT connect callback. The server cannot verify that claim.
+Under parent-first locked bearer authentication and a refreshed locked rotation,
+the enrollment generation, request ID, credential/parent/rotation serial, DER
+fingerprint and unexpired rotation must match. Associated Certificate history
+must exist and be unexpired and nonrevoked. Invalid device authority/body identity
+is 401; stale or conflicting reports are 409 without report or audit updates.
+
+The first report sets server UTC `node_reported_at` and `node_reported_boot_id`
+atomically with a `device_certificate_node_reported` audit targeted at the node,
+containing only machine requester, serial and boot ID. An exact same-boot retry
+does not refresh the timestamp or add an audit. A different boot for the same
+current leaf refreshes both with one new audit. Old reports cannot resurrect a
+rotation replaced by subsequent issuance. Transaction failures roll back and
+return sanitized 503; integrity conflicts return 409.
+
+The exact no-store 200 response fields are `device_id`, `request_id`,
+`cert_serial`, `accepted: true`, and `state: "node_reported"`. This is only an
+authenticated node assertion, not broker proof, cryptographic connection proof,
+or server verification of installation. Reports never revoke the old leaf.
+
+Manual administrator reenrollment creates another generation and bypasses the
+per-generation interval; expired rotations allow recovery without waiting.
+Neither is a forced-rotation UI, and the rate bound does not globally cap history
+across administrative reenrollments or repeated expiry recovery.
+
 ## Explicit remaining limits
 
 Issuance does **not** prove installation, reconnect, cutover, or broker ownership.
@@ -104,9 +158,9 @@ It intentionally does **not** revoke the previous certificate. The old
 certificate remains active until explicit cutover/revocation is delivered and
 real-broker tested. Existing enrollment/revocation behavior is unchanged.
 
-Future node reports are node assertions, not authoritative broker verification.
-The parent-owned next slice must define that endpoint and durable node pending
-request/key state, stage/validate/install handling, wrong-key/expired/partial
+Node reports are assertions, not authoritative broker verification.
+The next node slice must implement durable pending request/key and report outbox
+state, stage/validate/install handling, wrong-key/expired/partial
 write/same-path reload and reconnect behavior. Real Mosquitto mutual-TLS
 ownership, CRL revocation, and reconnect tests are still mandatory before full
 Task5 acceptance. No PostgreSQL or broker result is claimed by this slice.
@@ -130,3 +184,14 @@ creation/parent locking, revocation during ingestion (401 and no issuance),
 total deadlines for both stalled and continually arriving chunks, cancellation,
 and rejected bodies without opening database sessions. These establish request
 ordering, not PostgreSQL row-lock contention behavior.
+Report regressions cover exact/same-boot/new-boot responses and audits, malformed
+and bounded bodies before sessions, stale identity/generation/serial/fingerprint,
+revoked/expired history and device authority, atomic rollback, and reuse the real
+asynchronous stream/deadline/cancellation and revoke-during-ingestion tests.
+Renewal tests cover rate-before-pending, interval eligibility, exact retries,
+expired recovery, and obsolete reports after subsequent issuance.
+Controlled module-local clocks exercise real PKI's backdate at exactly 3,599 and
+3,600 seconds for reported and pending rows, both new timestamps and legacy
+aliases, while preserving certificate history's validity timestamps. The opt-in
+PostgreSQL interval suite repeats these thresholds with committed transactions,
+exact response retries, issuance/audit counts, and expired recovery.
