@@ -4,23 +4,19 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import ssl
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
-from app.contracts.v1.mqtt import (
-    MqttAdvertEnvelopeV1,
-    MqttEventEnvelopeV1,
-    MqttPacketEnvelopeV1,
-)
 from app.db.models import (
+    DeviceCredential,
     MqttIngestEvent,
     Packet,
     Repeater,
@@ -29,6 +25,8 @@ from app.db.models import (
     TopologyObservationSample,
     TopologyRollupHourly,
 )
+from app.security.devices import ELIGIBLE_STATUSES, lock_repeater
+from app.services.mqtt_identity import MAX_MESSAGE_BYTES, parse_managed_message
 from app.services.telemetry_stream import MqttTelemetryBroadcaster
 
 try:
@@ -42,7 +40,7 @@ logger = logging.getLogger("mqtt-ingest")
 @dataclass(slots=True)
 class NormalizedMqttMessage:
     topic: str
-    node_name: str
+    device_id: str
     timestamp: datetime
     event_type: str
     event_name: str | None
@@ -87,12 +85,13 @@ def _coerce_optional_str(value: Any) -> str | None:
 
 
 def _coerce_optional_float(value: Any) -> float | None:
-    if value is None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _coerce_optional_int(value: Any) -> int | None:
@@ -142,14 +141,14 @@ def _normalize_coordinates(latitude: Any, longitude: Any) -> tuple[float | None,
 
 
 def _min_datetime(*values: datetime | None) -> datetime | None:
-    candidates = [value for value in values if value is not None]
+    candidates = [_to_utc(value) for value in values if value is not None]
     if not candidates:
         return None
     return min(candidates)
 
 
 def _max_datetime(*values: datetime | None) -> datetime | None:
-    candidates = [value for value in values if value is not None]
+    candidates = [_to_utc(value) for value in values if value is not None]
     if not candidates:
         return None
     return max(candidates)
@@ -169,9 +168,23 @@ class MqttIngestProcessor:
             return IngestProcessResult(status="invalid")
 
         with self._session_factory() as db:
-            repeater = db.scalar(select(Repeater).where(Repeater.node_name == normalized.node_name))
+            # The parent lock is shared with HTTP credential revocation. Acquire it
+            # before refreshing credential authority and hold both through commit.
+            repeater = lock_repeater(db, normalized.device_id)
             if repeater is None:
                 return IngestProcessResult(status="unknown_repeater")
+            credential = db.scalar(
+                select(DeviceCredential)
+                .where(DeviceCredential.repeater_id == repeater.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if (
+                credential is None
+                or credential.revoked_at is not None
+                or repeater.status not in ELIGIBLE_STATUSES
+            ):
+                return IngestProcessResult(status="unauthorized_repeater")
 
             existing_event = db.scalar(
                 select(MqttIngestEvent.id).where(MqttIngestEvent.dedup_key == normalized.dedup_key)
@@ -214,7 +227,7 @@ class MqttIngestProcessor:
                 telemetry_event={
                     "event_id": event_row.id,
                     "repeater_id": repeater.id,
-                    "node_name": normalized.node_name,
+                    "node_name": repeater.node_name,
                     "timestamp": normalized.timestamp.isoformat().replace("+00:00", "Z"),
                     "event_type": normalized.event_type,
                     "event_name": normalized.event_name,
@@ -423,6 +436,9 @@ class MqttIngestProcessor:
     ) -> None:
         bucket_start = reference_time.replace(minute=0, second=0, microsecond=0)
         bucket_end = bucket_start + timedelta(hours=1)
+        # Sessions disable autoflush; include this advert's pending observation
+        # changes in the SQL aggregate rather than lagging behind one message.
+        db.flush()
         observed_nodes, zero_hop_nodes, avg_rssi, avg_snr = db.execute(
             select(
                 func.count(TopologyObservation.id),
@@ -459,113 +475,31 @@ class MqttIngestProcessor:
 
     def _normalize_message(self, topic: str, payload_bytes: bytes) -> NormalizedMqttMessage | None:
         try:
-            raw = json.loads(payload_bytes.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            logger.debug("Ignoring non-JSON MQTT payload on topic %s", topic)
+            envelope = parse_managed_message(topic, payload_bytes)
+        except ValueError:
             return None
-        if not isinstance(raw, dict):
-            return None
-
-        contract_msg = self._normalize_contract_message(raw)
-        if contract_msg is not None:
-            return contract_msg
-
-        return self._normalize_legacy_message(topic, raw)
-
-    def _normalize_contract_message(self, raw: dict[str, Any]) -> NormalizedMqttMessage | None:
-        msg_type = raw.get("type")
-        if msg_type not in {"packet", "advert", "event"}:
-            return None
-        if raw.get("version") != 1:
-            return None
-
-        try:
-            if msg_type == "packet":
-                envelope = MqttPacketEnvelopeV1.model_validate(raw)
-                event_name = None
-            elif msg_type == "advert":
-                envelope = MqttAdvertEnvelopeV1.model_validate(raw)
-                event_name = None
-            else:
-                envelope = MqttEventEnvelopeV1.model_validate(raw)
-                event_name = envelope.event_name
-        except ValidationError:
-            return None
-
-        timestamp = _parse_timestamp(envelope.timestamp)
-        dedup_key = self._build_dedup_key(
-            event_type=msg_type,
-            node_name=envelope.node_name,
-            event_name=event_name,
+        return NormalizedMqttMessage(
             topic=envelope.topic,
-            timestamp=timestamp,
+            device_id=envelope.device_id,
+            timestamp=envelope.timestamp,
+            event_type=envelope.event_type,
+            event_name=envelope.event_name,
             payload=envelope.payload,
-        )
-        return NormalizedMqttMessage(
-            topic=envelope.topic,
-            node_name=envelope.node_name,
-            timestamp=timestamp,
-            event_type=msg_type,
-            event_name=event_name,
-            payload=dict(envelope.payload),
-            dedup_key=dedup_key,
-        )
-
-    def _normalize_legacy_message(
-        self,
-        topic: str,
-        raw: dict[str, Any],
-    ) -> NormalizedMqttMessage | None:
-        parts = [part for part in topic.split("/") if part]
-        if len(parts) < 2:
-            return None
-
-        event_name: str | None = None
-        if len(parts) >= 3 and parts[-2] == "event":
-            node_name = parts[-3]
-            event_type = "event"
-            event_name = parts[-1]
-        else:
-            node_name = parts[-2]
-            suffix = parts[-1]
-            if suffix in {"packet", "advert"}:
-                event_type = suffix
-            elif suffix == "event":
-                event_type = "event"
-                event_name = _coerce_optional_str(raw.get("event_name")) or "event"
-            else:
-                event_type = "event"
-                event_name = suffix
-
-        if not node_name:
-            return None
-
-        payload = dict(raw)
-        timestamp = _parse_timestamp(raw.get("timestamp"))
-        normalized_topic = _coerce_optional_str(raw.get("topic")) or topic
-        dedup_key = self._build_dedup_key(
-            event_type=event_type,
-            node_name=node_name,
-            event_name=event_name,
-            topic=normalized_topic,
-            timestamp=timestamp,
-            payload=payload,
-        )
-        return NormalizedMqttMessage(
-            topic=normalized_topic,
-            node_name=node_name,
-            timestamp=timestamp,
-            event_type=event_type,
-            event_name=event_name,
-            payload=payload,
-            dedup_key=dedup_key,
+            dedup_key=self._build_dedup_key(
+                event_type=envelope.event_type,
+                device_id=envelope.device_id,
+                event_name=envelope.event_name,
+                topic=envelope.topic,
+                timestamp=envelope.timestamp,
+                payload=envelope.payload,
+            ),
         )
 
     @staticmethod
     def _build_dedup_key(
         *,
         event_type: str,
-        node_name: str,
+        device_id: str,
         event_name: str | None,
         topic: str,
         timestamp: datetime,
@@ -573,13 +507,13 @@ class MqttIngestProcessor:
     ) -> str:
         packet_hash = _coerce_optional_str(payload.get("packet_hash"))
         if event_type == "packet" and packet_hash:
-            return f"packet:{node_name}:{packet_hash.lower()}"
+            return f"packet:{device_id}:{packet_hash.lower()}"
 
         canonical_payload = json.dumps(payload, default=str, separators=(",", ":"), sort_keys=True)
         source = "|".join(
             [
                 event_type,
-                node_name,
+                device_id,
                 event_name or "",
                 topic,
                 timestamp.isoformat(),
@@ -661,10 +595,9 @@ class MqttIngestService:
         client.loop_start()
         self._client = client
         logger.info(
-            "MQTT ingest subscriber started (%s:%s, base_topic=%s)",
+            "MQTT ingest subscriber started (%s:%s, managed prefix=glass)",
             self._settings.mqtt_broker_host,
             self._settings.mqtt_broker_port,
-            self._settings.mqtt_base_topic,
         )
 
     async def stop(self) -> None:
@@ -693,12 +626,14 @@ class MqttIngestService:
             logger.warning("MQTT ingest connect failed with code %s", rc)
             return
 
-        subscription = f"{self._settings.mqtt_base_topic}/+/#"
+        subscription = "glass/+/#"
         client.subscribe(subscription)
         logger.info("MQTT ingest subscribed to %s", subscription)
 
     def _on_message(self, _client, _userdata, msg) -> None:
         if not self._running or self._loop is None:
+            return
+        if len(msg.payload) > MAX_MESSAGE_BYTES:
             return
         try:
             self._loop.call_soon_threadsafe(self._enqueue_message, msg.topic, bytes(msg.payload))
@@ -706,7 +641,7 @@ class MqttIngestService:
             return
 
     def _enqueue_message(self, topic: str, payload: bytes) -> None:
-        if not self._running:
+        if not self._running or len(payload) > MAX_MESSAGE_BYTES:
             return
         try:
             self._queue.put_nowait((topic, payload))
@@ -729,7 +664,7 @@ class MqttIngestService:
             topic, payload = item
             try:
                 result = self._processor.process_message_with_event(topic, payload)
-                if result.status in {"unknown_repeater", "invalid"}:
+                if result.status in {"unknown_repeater", "unauthorized_repeater", "invalid"}:
                     logger.debug("MQTT ingest skipped message (%s) from %s", result.status, topic)
                 if result.status == "ingested" and result.telemetry_event and self._broadcaster:
                     self._broadcaster.publish(result.telemetry_event)
