@@ -1,0 +1,11 @@
+# Task5(c2) parent specification review
+
+Baseline Glass9a75149e7e8bbfee25d268b4a2d53ef0bc61cc8c / Repeater257db7d7495da411c14fef6016a58a95e4b91645. Implementer deleg_075140a0 modified only rotation_state.py, test_glass_rotation_state.py and additive repeater/glass/README.md. No installation or handler activation.
+
+Verdict: PASS for the bounded offline candidate validator, before independent quality review.
+
+Parent inspected complete diff and actual Glass CertificateRenewalResponse, enrollment validator and pending-state helpers. Exact eight response keys match the actual server wire contract; server datetime becomes a timezone-aware ISO string. Strict scalar/JSON bounds, canonical single PEM, issuing-CA DER pinning, pending generation/request/key authority, candidate identity/usage/signature/expiry/serial/fingerprint validation and explicit current bearer/pubkey/origin preservation are implemented. Existing secure ancestry/private directory/fixed lock are opened only, not created; missing or invalid pending state cannot generate another key. Inputs/current credentials/pending remain unchanged. Public failure text and descriptor cleanup suppress library secrets. No CA/HTTPS trust changes, configuration writes, networking, retirement or activation.
+
+Parent actual isolated CT301 Python3.12 existing test image, network none, read-only source, 2 CPUs/2GiB and private tmpfs: test_glass_rotation_state.py 167 passed,2 skipped (directory FIFO inapplicable, one c1 and one c2),98.24s. Source archive SHA2561e0a6b0d6d85f0fbd71e1c615f682a358b7c02f9cd2a8ca6e68145101a4925d8. Evidence /home/yellowcooln/openhop-dev/glass-revamp-run/lab/node-c2-focus.log. A read-only pytest cache warning is not a failure. Parent check-only Ruff lint/format, strict OpenAPI and git diff --check pass.
+
+Local child focus was blocked by legitimately unsafe host scratch ancestry, not command approval; no chmod or security relaxation. Child confirmed RED missing API and locally runnable syntactic subset9pass. Parent secure fullsuite and independent quality remain required before publication. Returning validated material is not atomic installation, current MQTT connection proof, report delivery or fullTask5/M1 acceptance.
