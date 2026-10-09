@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from app.contracts.v2.common import (
     Contract,
@@ -156,6 +156,7 @@ class ResultV2(Envelope):
 
 
 class ResultAcceptanceV2(Contract):
+    disposition: Literal["accepted", "superseded"] = "accepted"
     request_id: UUIDValue
     execution_id: UUIDValue | None
     acceptance_id: UUIDValue | None = Field(default=None, exclude_if=lambda v: v is None)
@@ -163,8 +164,17 @@ class ResultAcceptanceV2(Contract):
         default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda v: v is None
     )
 
+    @model_serializer(mode="wrap")
+    def serialize_acceptance(self, handler):
+        raw = handler(self)
+        if self.acceptance_id is None and self.disposition == "accepted":
+            raw.pop("disposition", None)
+        return raw
+
     @model_validator(mode="after")
     def receipt_pair(self):
+        if self.disposition == "superseded" and self.acceptance_id is None:
+            raise ValueError("superseded history requires an exact receipt")
         if (self.acceptance_id is None) != (self.result_sha256 is None):
             raise ValueError("acceptance ID and digest must be present together")
         return self

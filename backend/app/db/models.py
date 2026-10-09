@@ -568,10 +568,32 @@ class DeviceCommand(Base):
     )
 
 
+class DeviceCommandLease(Base):
+    """Issued offers only, retained even when the current query lease is replaced."""
+
+    __tablename__ = "device_command_leases"
+    __table_args__ = (
+        UniqueConstraint("command_id", "attempt", name="uq_device_command_lease_attempt"),
+        CheckConstraint("attempt >= 1 AND attempt <= 3", name="ck_device_command_lease_attempt"),
+        CheckConstraint("expires_at > issued_at", name="ck_device_command_lease_times"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    command_id: Mapped[str] = mapped_column(
+        ForeignKey("device_commands.id", ondelete="CASCADE"), index=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    credential_generation: Mapped[str] = mapped_column(String(64))
+
+
 class DeviceCommandReceipt(Base):
     __tablename__ = "device_command_receipts"
     __table_args__ = (
         UniqueConstraint("command_id", "result_sha256", name="uq_device_command_receipt_digest"),
+        CheckConstraint(
+            "disposition IN ('accepted','superseded')", name="ck_device_command_receipt_disposition"
+        ),
     )
     acceptance_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
     command_id: Mapped[str] = mapped_column(
@@ -582,6 +604,9 @@ class DeviceCommandReceipt(Base):
     lease_id: Mapped[str] = mapped_column(String(36))
     attempt: Mapped[int] = mapped_column(Integer)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    disposition: Mapped[str] = mapped_column(
+        String(16), default="accepted", server_default="accepted"
+    )
 
 
 class ConfigSnapshot(Base):

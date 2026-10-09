@@ -5,15 +5,15 @@ Authoritative specification: 2026-10-07_231824-openhop-glass-revamp.md and all f
 | Task | Prerequisite / gate | Current status |
 |---|---|---|
 |1 baselines/classification|none|Completed, preserved existing branch; prior spec/quality and publication evidence retained|
-|2 quality gates/fixtures|1|Completed baseline gates; four characterized frontend defects deliberately remain10/16|
+|2 quality gates/fixtures|1|Completed baseline gates; loading regressions repaired in the direct UI checkpoint. Policy roundtrip regressions remain for16.|
 |3 v2 contracts/adapters|2|Completed M0 protocol checkpoint; preserve capability fail-closed behavior|
-|4 enrollment/authenticated inform|3|Completed isolated HTTPS/PG gate; original lab runtime remains Task4|
+|4 enrollment/authenticated inform|3|Completed isolated HTTPS/PG gate; original Glass deployment unchanged. Isolated candidate now runs Task7 source.|
 |5 MQTT ownership/rotation|4|Completed integrated gate: stable-ID ingress plus actual Mosquitto2.1.2 ownership/read enforcement, DB ACL/CRL publication/connected-session revocation, actual proxied HTTPS CSR issuance and same-path CURRENT-client callback/report/completion across successive cycles, lost-response/new-boot/outbox/restart replay. See task5-integrated-acceptance.md. Expired CURRENT fails closed with explicit operator reenrollment; protected historical snapshots alone may expire. No live Repeater deployment.|
 |6 durable claiming/admission|4/3; M1 completion also requires5|Implemented reviewed typed backend lifecycle and mirrored offline lease/ACK DTOs; actual PG14 and HTTPS7 checks pass. Whole backend run had3 obsolete test expectations; test-only updates reviewed, both affected modules28pass. No full-green claim; final M1whole-suite gate pending. See task6-acceptance.md.|
-|7 node ledger/restart reconciliation|6 command lifecycle/schema|Unstarted; persistence/exactack/kill tests needed|
+|7 node ledger/restart reconciliation|6 command lifecycle/schema|Delivered ledger, v2 consumption and result reconciliation; real process-kill and HTTPS lost-ACK/stale-lease gates passed. See task7-acceptance.md. Full M1 suite gate remains after8.|
 |8 transactional config/policy/key|6/7 outcome and revision contracts|Unstarted; last-good metadata/state and canonical readback gates needed|
 |9 bounded domain queries|3/4 stable authenticated protocol; read-only can overlap5–8|Unstarted; delegate each domain separately|
-|10 resource state/navigation|2/3 DTOs; use9 for actual domains|Unstarted; partial-loading characterized defect remains|
+|10 resource state/navigation|2/3 DTOs; use9 for actual domains|Partial: independent resource loading, last-good data, persistent retry warning and stale-response/logout fencing delivered in b3ec87e with unit/browser checks. Scoped/lazy navigation, generated DTOs, request abort and full role/session/browser gates remain.|
 |11 read-only domain screens|9/10|Unstarted; no decorative actions|
 |12 radio/mesh editor|M1(4–8),9–11 relevantdomain|Unstarted; explicit multi-radio/scoped RF validation|
 |13 sensor/GPS/broker editor|M1,9–11 relevantdomains|Unstarted; split independent domains and secret-preserve semantics|

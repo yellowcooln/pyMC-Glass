@@ -1,6 +1,6 @@
 """Durable typed admission and leasing. Caller owns the atomic transaction.
 
-All mutations acquire Repeater -> DeviceCommand -> receipts. PostgreSQL parent
+All mutations acquire Repeater -> DeviceCommand -> lease -> receipts. PostgreSQL parent
 row locks serialize admission, cancellation and concurrent informs. No legacy
 queue reads, execution handlers, or RF retries live here.
 """
@@ -19,6 +19,7 @@ from app.contracts.v2.common import utc_value, uuid_value
 from app.db.models import (
     Certificate,
     DeviceCommand,
+    DeviceCommandLease,
     DeviceCommandReceipt,
     DeviceCredential,
     DeviceObservation,
@@ -353,6 +354,18 @@ def claim_commands(db, device_id, capabilities, *, now=None):
         item.attempt += 1
         item.lease_issued_at = now
         item.lease_expires_at = min(now + timedelta(seconds=LEASE_SECONDS), aware(item.expires_at))
+        db.add(
+            DeviceCommandLease(
+                id=item.lease_id,
+                command_id=item.id,
+                attempt=item.attempt,
+                issued_at=item.lease_issued_at,
+                expires_at=item.lease_expires_at,
+                credential_generation=item.credential_generation,
+            )
+        )
+        # The durable issuance record must exist before an offer can escape.
+        db.flush()
         raw = req.model_dump(mode="json")
         raw.update(
             lease_id=item.lease_id, attempt=item.attempt, lease_expires_at=item.lease_expires_at
@@ -361,6 +374,124 @@ def claim_commands(db, device_id, capabilities, *, now=None):
         audit(db, item, "command_leased")
     db.flush()
     return delivered
+
+
+def reconcile_result(db, device_id, result: ResultV2, *, now=None):
+    """ACK known obsolete offers as history, never as authoritative completion.
+
+    Caller owns commit. Parent -> command -> lease -> receipt lock ordering is
+    shared with admission/live completion. Missing history is not inferred from
+    an arbitrary client lease (migration backfills only the persisted current one).
+    """
+    device = lock_repeater(db, device_id)
+    now = clock(now)
+    credential = authority(db, device, now)
+    item = db.scalar(
+        select(DeviceCommand)
+        .where(
+            DeviceCommand.device_id == device_id, DeviceCommand.request_id == str(result.request_id)
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if item is None or str(result.device_id) != device_id:
+        raise HTTPException(409, "Result references unoffered command")
+    if item.credential_generation != credential.token_hash:
+        raise HTTPException(409, "Result credential generation mismatch")
+    try:
+        result.check_request(stored_request(item))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    lease = db.scalar(
+        select(DeviceCommandLease)
+        .where(
+            DeviceCommandLease.id == str(result.lease_id), DeviceCommandLease.command_id == item.id
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        lease is None
+        or result.attempt != lease.attempt
+        or lease.credential_generation != credential.token_hash
+        or aware(lease.issued_at) < aware(item.created_at)
+        or not aware(lease.issued_at) < aware(lease.expires_at) <= aware(item.expires_at)
+        or result.sent_at < aware(lease.issued_at)
+        or result.sent_at > now
+        or (result.completed_at is not None and result.completed_at < aware(lease.issued_at))
+    ):
+        raise HTTPException(409, "Result issued lease/attempt/time mismatch")
+    if str(result.lease_id) == item.lease_id:
+        if (
+            lease.attempt != item.attempt
+            or aware(lease.issued_at) != aware(item.lease_issued_at)
+            or aware(lease.expires_at) != aware(item.lease_expires_at)
+        ):
+            raise HTTPException(409, "Current lease history conflicts")
+        return accept_result(db, device_id, result, now=now)
+    if (
+        item.lease_id is None
+        or lease.attempt >= item.attempt
+        or item.lease_issued_at is None
+        or aware(lease.issued_at) >= aware(item.lease_issued_at)
+    ):
+        raise HTTPException(409, "Result is not a known older lease")
+    current = db.scalar(
+        select(DeviceCommandLease)
+        .where(DeviceCommandLease.id == item.lease_id, DeviceCommandLease.command_id == item.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        current is None
+        or current.attempt != item.attempt
+        or current.credential_generation != credential.token_hash
+        or aware(current.issued_at) != aware(item.lease_issued_at)
+        or aware(current.expires_at) != aware(item.lease_expires_at)
+    ):
+        raise HTTPException(409, "Current lease history missing or conflicting")
+    wire = canonical_json(result)
+    digest = sha256(wire.encode()).hexdigest()
+    receipts = db.scalars(
+        select(DeviceCommandReceipt)
+        .where(DeviceCommandReceipt.command_id == item.id)
+        .limit(MAX_RECEIPTS + 1)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
+    for receipt in receipts:
+        if receipt.result_sha256 == digest:
+            if receipt.result_json != wire:
+                raise HTTPException(409, "Result digest conflict")
+            return ResultAcceptanceV2(
+                request_id=result.request_id,
+                execution_id=result.execution_id,
+                acceptance_id=receipt.acceptance_id,
+                result_sha256=digest,
+                disposition=receipt.disposition,
+            )
+    if len(receipts) >= MAX_RECEIPTS:
+        raise HTTPException(409, "Command result receipt limit reached")
+    receipt = DeviceCommandReceipt(
+        acceptance_id=str(uuid4()),
+        command_id=item.id,
+        result_json=wire,
+        result_sha256=digest,
+        lease_id=lease.id,
+        attempt=lease.attempt,
+        accepted_at=now,
+        disposition="superseded",
+    )
+    db.add(receipt)
+    audit(db, item, "command_result_archived")
+    db.flush()
+    return ResultAcceptanceV2(
+        request_id=result.request_id,
+        execution_id=result.execution_id,
+        acceptance_id=receipt.acceptance_id,
+        result_sha256=digest,
+        disposition="superseded",
+    )
 
 
 def accept_result(db, device_id, result: ResultV2, *, now=None):
@@ -384,11 +515,26 @@ def accept_result(db, device_id, result: ResultV2, *, now=None):
         result.check_request(req)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+    target = {"accepted": "received", "unsupported": "failed", "conflict": "failed"}.get(
+        result.status, result.status
+    )
+    lease = None
+    if item.status == "unknown" and target == "unknown":
+        # Acquire optional history before receipts to preserve the shared lock
+        # order. Validate it only for a new result below: retained exact ACKs
+        # do not depend on history or offer metadata still being available.
+        lease = db.scalar(
+            select(DeviceCommandLease)
+            .where(DeviceCommandLease.id == item.lease_id, DeviceCommandLease.command_id == item.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     wire = canonical_json(result)
     digest = sha256(wire.encode()).hexdigest()
     receipts = db.scalars(
         select(DeviceCommandReceipt)
         .where(DeviceCommandReceipt.command_id == item.id)
+        .limit(MAX_RECEIPTS + 1)
         .with_for_update()
         .execution_options(populate_existing=True)
     ).all()
@@ -399,6 +545,7 @@ def accept_result(db, device_id, result: ResultV2, *, now=None):
                 execution_id=result.execution_id,
                 acceptance_id=receipt.acceptance_id,
                 result_sha256=digest,
+                disposition=receipt.disposition,
             )
     if (
         result.lease_id is None
@@ -412,11 +559,23 @@ def accept_result(db, device_id, result: ResultV2, *, now=None):
         raise HTTPException(409, "Result lease/attempt/time mismatch")
     if len(receipts) >= MAX_RECEIPTS:
         raise HTTPException(409, "Command result receipt limit reached")
-    target = {"accepted": "received", "unsupported": "failed", "conflict": "failed"}.get(
-        result.status, result.status
-    )
+    if item.status == "unknown" and target == "unknown":
+        # Deadline uncertainty is not a node result phase. A recovered executor
+        # can acknowledge its first durable UNKNOWN on the original current
+        # offer without claiming completion or replaying a nonretryable effect.
+        if (
+            lease is None
+            or lease.attempt != item.attempt
+            or lease.credential_generation != credential.token_hash
+            or aware(lease.issued_at) != aware(item.lease_issued_at)
+            or aware(lease.expires_at) != aware(item.lease_expires_at)
+            or aware(lease.issued_at) < aware(item.created_at)
+            or not aware(lease.issued_at) < aware(lease.expires_at) <= aware(item.expires_at)
+        ):
+            raise HTTPException(409, "Current lease history missing or conflicting")
     if item.status in TERMINAL or (
-        item.status == "unknown" and target not in {"succeeded", "failed", "awaiting_verification"}
+        item.status == "unknown"
+        and target not in {"succeeded", "failed", "awaiting_verification", "unknown"}
     ):
         raise HTTPException(409, "Result conflicts with command state")
     if (
@@ -432,6 +591,14 @@ def accept_result(db, device_id, result: ResultV2, *, now=None):
         previous = {"accepted": "received", "unsupported": "failed", "conflict": "failed"}.get(
             last.status, last.status
         )
+        if (
+            item.status == target == previous == "unknown"
+            and last.lease_id == result.lease_id
+            and last.attempt == result.attempt
+        ):
+            # Exact wire retries returned their retained receipt above. Changing
+            # a timestamp/body alone cannot consume another bounded phase.
+            raise HTTPException(409, "Result repeats uncertainty without a state change")
         if (
             last.lease_id == result.lease_id
             and last.attempt == result.attempt
@@ -460,6 +627,7 @@ def accept_result(db, device_id, result: ResultV2, *, now=None):
         lease_id=item.lease_id,
         attempt=item.attempt,
         accepted_at=now,
+        disposition="accepted",
     )
     db.add(receipt)
     item.status = target

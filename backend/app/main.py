@@ -15,6 +15,7 @@ from app.api.routes.commands import router as commands_router
 from app.api.routes.config_snapshots import router as config_snapshots_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.device_certificates import router as device_certificates_router
+from app.api.routes.device_reconciliation import router as device_reconciliation_router
 from app.api.routes.enrollment import router as enrollment_router
 from app.api.routes.health import router as health_router
 from app.api.routes.inform import router as inform_router
@@ -114,6 +115,7 @@ def create_app() -> FastAPI:
     app.include_router(repeaters_router, tags=["repeaters"])
     app.include_router(enrollment_router, tags=["enrollment"])
     app.include_router(device_certificates_router, tags=["device-certificates"])
+    app.include_router(device_reconciliation_router, tags=["device-commands"])
     app.include_router(adoption_router, tags=["adoption"])
     app.include_router(commands_router, tags=["commands"])
     app.include_router(config_snapshots_router, tags=["config-snapshots"])
