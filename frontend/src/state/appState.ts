@@ -55,6 +55,15 @@ const USER_STORAGE_KEY = "openhop_glass_user";
 const EXPIRES_AT_STORAGE_KEY = "openhop_glass_expires_at";
 const SETUP_WIZARD_SKIP_KEY = "openhop_glass_setup_wizard_skipped";
 const MAX_TELEMETRY_EVENTS = 100;
+const DATA_RESOURCES = ["repeaters", "pendingRepeaters", "commands", "audits", "users"] as const;
+type DataResource = typeof DATA_RESOURCES[number];
+type ResourceStatus = { loading: boolean; error: string | null; lastSuccessAt: string | null };
+
+function emptyResourceStatus(): Record<DataResource, ResourceStatus> {
+  return Object.fromEntries(DATA_RESOURCES.map((name) => [name, {
+    loading: false, error: null, lastSuccessAt: null,
+  }])) as Record<DataResource, ResourceStatus>;
+}
 
 export const appState = reactive({
   initialized: false,
@@ -63,6 +72,7 @@ export const appState = reactive({
   loginLoading: false,
   bootstrapLoading: false,
   dataLoading: false,
+  resources: emptyResourceStatus(),
   actionLoading: false,
   token: null as string | null,
   user: null as UserInfoResponse | null,
@@ -101,6 +111,7 @@ export const commandCounts = computed(() => {
   return counts;
 });
 
+let refreshGeneration = 0;
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 let telemetrySource: EventSource | null = null;
 
@@ -208,6 +219,10 @@ function persistSession(token: string, user: UserInfoResponse, expiresAt: string
 }
 
 function clearSession(): void {
+  refreshGeneration += 1;
+  appState.resources = emptyResourceStatus();
+  appState.dataLoading = false;
+  appState.lastSyncAt = null;
   stopTelemetryStream();
   appState.token = null;
   appState.user = null;
@@ -251,7 +266,7 @@ export async function initializeAppState(): Promise<void> {
       try {
         const user = await getCurrentUser(storedToken);
         persistSession(storedToken, user, storedExpiresAt ?? "");
-        await refreshAllData();
+        void refreshAllData();
         startTelemetryStream();
         await checkSetupWizard();
       } catch {
@@ -396,7 +411,7 @@ export async function loginAccount(email: string, password: string): Promise<voi
   try {
     const response = await login(email, password);
     persistSession(response.access_token, response.user, response.expires_at);
-    await refreshAllData();
+    void refreshAllData();
     startTelemetryStream();
     pushSuccess("Signed in.");
     await checkSetupWizard();
@@ -424,25 +439,47 @@ export async function refreshAllData(): Promise<void> {
   if (!appState.token) {
     return;
   }
+  const token = appState.token;
+  const generation = ++refreshGeneration;
+  const current = () => appState.token === token && generation === refreshGeneration;
   appState.dataLoading = true;
+
+  async function load<T>(name: DataResource, request: () => Promise<T>, apply: (rows: T) => void) {
+    const resource = appState.resources[name];
+    resource.loading = true;
+    resource.error = null;
+    try {
+      const rows = await request();
+      if (current()) {
+        apply(rows);
+        resource.lastSuccessAt = new Date().toISOString();
+      }
+      return null;
+    } catch (error) {
+      if (current()) resource.error = error instanceof Error ? error.message : "Request failed";
+      return { error };
+    } finally {
+      if (current()) resource.loading = false;
+    }
+  }
+
   try {
-    const [repeaters, pending, commands, audits, users] = await Promise.all([
-      listRepeaters(appState.token),
-      listPendingAdoptions(appState.token),
-      listCommands(appState.token, { limit: 200 }),
-      listAudit(appState.token, 200),
-      isAdmin.value ? listUsers(appState.token) : Promise.resolve([]),
+    const results = await Promise.all([
+      load("repeaters", () => listRepeaters(token), (rows) => { appState.repeaters = rows; }),
+      load("pendingRepeaters", () => listPendingAdoptions(token), (rows) => { appState.pendingRepeaters = rows; }),
+      load("commands", () => listCommands(token, { limit: 200 }), (rows) => { appState.commands = rows; }),
+      load("audits", () => listAudit(token, 200), (rows) => { appState.audits = rows; }),
+      load("users", () => isAdmin.value ? listUsers(token) : Promise.resolve([]), (rows) => { appState.users = rows; }),
     ]);
-    appState.repeaters = repeaters;
-    appState.pendingRepeaters = pending;
-    appState.commands = commands;
-    appState.audits = audits;
-    appState.users = users;
-    appState.lastSyncAt = new Date().toISOString();
-  } catch (error) {
-    pushError(error);
+    if (!current()) return;
+    const failure = results.find((result) => result !== null);
+    if (failure !== undefined) {
+      pushError(failure.error);
+    } else {
+      appState.lastSyncAt = new Date().toISOString();
+    }
   } finally {
-    appState.dataLoading = false;
+    if (current()) appState.dataLoading = false;
   }
 }
 
